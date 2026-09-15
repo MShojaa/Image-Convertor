@@ -24,11 +24,16 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import ClassVar
 
-from PIL import Image
+from PIL import Image, ImageFilter
 
 # Mid grey: the hard cut has to split somewhere, and halfway is the only
 # choice that does not lean light or dark before seeing the image.
 DEFAULT_THRESHOLD = 128
+
+# One pixel of blur. Big enough to see on anything, small enough not to
+# destroy a small image -- and the radii below 1 are the useful ones there,
+# which is why this is a float and not an int.
+DEFAULT_BLUR_RADIUS = 1.0
 
 
 @dataclass(frozen=True)
@@ -49,6 +54,38 @@ class Effect:
     def described(self) -> str:
         """How this effect would be written on the command line."""
         return self.name
+
+
+@dataclass(frozen=True)
+class Blur(Effect):
+    """Gaussian blur, in output pixels.
+
+    It runs before monochrome, which is the only ordering that does anything:
+    a 1-bit image has no levels between black and white to smear, so blurring
+    one gives back the same image.
+
+    Blur into a hard cut is the pairing worth knowing about -- it is how a
+    threshold gets a soft edge instead of a jagged one. Blur into a dither
+    mostly cancels out, because dithering is already scattering dots to fake
+    the grey levels the blur just created.
+    """
+
+    radius: float = DEFAULT_BLUR_RADIUS
+
+    name: ClassVar[str] = "blur"
+    order: ClassVar[int] = 10
+
+    def __post_init__(self) -> None:
+        if self.radius < 0:
+            raise ValueError(f"A blur radius cannot be negative -- got {self.radius}")
+
+    def apply(self, image: Image.Image) -> Image.Image:
+        if self.radius == 0:
+            return image
+        return image.filter(ImageFilter.GaussianBlur(self.radius))
+
+    def described(self) -> str:
+        return f"{self.name}:{self.radius:g}"
 
 
 @dataclass(frozen=True)
@@ -113,6 +150,7 @@ def order_effects(effects: tuple[Effect, ...]) -> tuple[Effect, ...]:
 # Every effect the app knows, by the name the user types. Adding one here is
 # all it takes to make it parseable -- there is no second list to update.
 REGISTRY: dict[str, type[Effect]] = {
+    Blur.name: Blur,
     Monochrome.name: Monochrome,
 }
 
@@ -155,6 +193,14 @@ def _parse_argument(kind: type[Effect], argument: str) -> object:
         except ValueError:
             raise ValueError(
                 f"A monochrome threshold is a whole number -- got {argument!r}"
+            ) from None
+
+    if kind is Blur:
+        try:
+            return float(argument)
+        except ValueError:
+            raise ValueError(
+                f"A blur radius is a number of pixels -- got {argument!r}"
             ) from None
 
     raise ValueError(f"{kind.name} takes no argument, got {argument!r}")

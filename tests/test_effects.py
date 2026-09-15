@@ -13,6 +13,7 @@ from PIL import Image
 from image_convertor.effects import (
     DEFAULT_THRESHOLD,
     REGISTRY,
+    Blur,
     Effect,
     Monochrome,
     apply_effects,
@@ -147,3 +148,84 @@ def test_what_describe_prints_can_be_parsed_back():
     """The line the app prints is a line that could have been typed."""
     for effect in (Monochrome(None), Monochrome(DEFAULT_THRESHOLD)):
         assert parse_effect(effect.described()) == effect
+
+
+# --- blur ----------------------------------------------------------------
+
+def edge_image():
+    """Half black, half white, with one hard vertical edge down the middle."""
+    image = Image.new("RGB", (16, 4), (255, 255, 255))
+    for x in range(8):
+        for y in range(4):
+            image.putpixel((x, y), (0, 0, 0))
+    return image
+
+
+def greys(image):
+    """The middle row, as grey levels."""
+    row = image.convert("L")
+    return [row.getpixel((x, 2)) for x in range(row.width)]
+
+
+def test_blur_softens_an_edge():
+    """The point of it: pixels that were 0 or 255 land in between."""
+    before = greys(edge_image())
+    after = greys(Blur(2).apply(edge_image()))
+
+    assert set(before) == {0, 255}
+    assert any(0 < value < 255 for value in after)
+
+
+def test_a_bigger_radius_spreads_further():
+    narrow = greys(Blur(1).apply(edge_image()))
+    wide = greys(Blur(4).apply(edge_image()))
+
+    def softened(row):
+        return sum(1 for value in row if 0 < value < 255)
+
+    assert softened(wide) > softened(narrow)
+
+
+def test_a_zero_radius_changes_nothing():
+    """Not an error -- it is the identity, and a slider that starts at 0 needs it."""
+    assert greys(Blur(0).apply(edge_image())) == greys(edge_image())
+
+
+def test_a_negative_radius_is_refused():
+    with pytest.raises(ValueError):
+        Blur(-1)
+
+
+def test_blur_takes_a_fractional_radius():
+    """Below 1 is the useful range on a small image, so it cannot be an int."""
+    assert parse_effect("blur:0.5") == Blur(0.5)
+
+
+def test_blur_runs_before_monochrome():
+    """A 1-bit image has nothing between black and white left to smear."""
+    assert Blur.order < Monochrome.order
+
+    ordered = order_effects((Monochrome(128), Blur(2)))
+    assert ordered == (Blur(2), Monochrome(128))
+
+
+def test_blur_into_a_hard_cut_moves_the_edge_but_keeps_two_levels():
+    """The pairing worth knowing about: a soft-edged threshold, still 1-bit."""
+    result = apply_effects(edge_image(), (Blur(3), Monochrome(128)))
+
+    assert result.mode == "1"
+    assert set(greys(result)) == {0, 255}
+
+
+def test_a_blur_radius_reads_back_without_a_trailing_zero():
+    """describe() is meant to be re-typable; "blur:2.0" is noise."""
+    assert Blur(2).described() == "blur:2"
+    assert Blur(0.5).described() == "blur:0.5"
+    assert parse_effect(Blur(2).described()) == Blur(2)
+
+
+def test_a_blur_radius_that_is_not_a_number_is_refused():
+    with pytest.raises(ValueError) as raised:
+        parse_effect("blur:lots")
+
+    assert "blur radius" in str(raised.value)
