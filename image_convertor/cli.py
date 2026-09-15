@@ -12,6 +12,7 @@ import sys
 from pathlib import Path
 
 from . import __version__
+from . import formats
 from .converter import Size, convert_image, find_images, parse_size
 from .effects import (
     DEFAULT_THRESHOLD,
@@ -152,20 +153,26 @@ def run(args: argparse.Namespace) -> int:
     box = parse_size(args.size) if args.size is not None else ask_size()
     effects = resolve_effects(args)
 
+    chosen_format = formats.resolve(args.format) if args.format else None
+
     output_folder = base / OUTPUT_NAME
     output_folder.mkdir(parents=True, exist_ok=True)
 
     print()
     print(f"Writing to {output_folder}")
     print(f"Effects: {describe(effects)}")
+    print(f"Format:  {chosen_format.name if chosen_format else 'same as the input'}")
     print()
 
     failures = 0
     not_shrunk = []
     for image_path in images:
-        destination = output_folder / (image_path.stem + ".bmp")
+        # Named for the format it is actually written in, which with no
+        # --format is the source's own -- so a .png in is a .png out.
+        written_as = chosen_format or formats.for_source(image_path)
+        destination = formats.destination_for(image_path, output_folder, written_as)
         try:
-            result = convert_image(image_path, destination, box, effects)
+            result = convert_image(image_path, destination, box, effects, written_as)
         except Exception as error:  # a bad file should not stop the batch
             failures += 1
             print(f"  FAILED  {image_path.name}: {error}")
@@ -232,6 +239,14 @@ def build_parser() -> argparse.ArgumentParser:
         "--size",
         metavar="WxH",
         help="Resize box, e.g. 128x64. Omit to be asked; pass '' for no resizing.",
+    )
+    parser.add_argument(
+        "--format",
+        metavar="NAME",
+        help=(
+            "The format to write. Defaults to the same as the input, so a png "
+            "in gives a png out. Known: " + ", ".join(sorted(formats.REGISTRY))
+        ),
     )
     parser.add_argument(
         "--effect",
@@ -310,6 +325,15 @@ def main(argv: list[str] | None = None) -> int:
     if args.mode == "dither" and args.threshold is not None:
         print("--threshold is a hard cut setting; it does not go with --mode dither.")
         return 1
+
+    if args.format is not None:
+        # Checked here rather than where it is used: a typo should be found
+        # before the folder is walked, not after the first file is written.
+        try:
+            formats.resolve(args.format)
+        except ValueError as error:
+            print(error)
+            return 1
 
     try:
         return run(args)

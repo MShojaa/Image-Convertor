@@ -162,16 +162,18 @@ def test_output_is_one_bit():
 
 # --- the whole thing, on real files --------------------------------------
 
-def test_convert_image_writes_a_1bit_bmp(tmp_path):
+def test_convert_image_writes_a_1bit_image(tmp_path):
     source = tmp_path / "logo.png"
     Image.new("RGBA", (20, 16), (0, 0, 0, 0)).save(source)
-    destination = tmp_path / "out" / "logo.bmp"
+    destination = tmp_path / "out" / "logo.png"
 
-    written = convert_image(source, destination, Size(10, 10), (Monochrome(DEFAULT_THRESHOLD),))
+    written = convert_image(
+        source, destination, Size(10, 10), (Monochrome(DEFAULT_THRESHOLD),)
+    )
 
     assert written.size == Size(10, 10)
     with Image.open(destination) as result:
-        assert result.format == "BMP"
+        assert result.format == "PNG"  # the source's own format, by default
         assert result.mode == "1"
         assert rows(result) == ["." * 10] * 10  # transparent all the way through
 
@@ -180,7 +182,7 @@ def test_convert_image_without_a_box_keeps_the_size(tmp_path):
     source = tmp_path / "wide.png"
     Image.new("RGB", (20, 16), BLACK).save(source)
 
-    written = convert_image(source, tmp_path / "wide.bmp", None, (Monochrome(None),))
+    written = convert_image(source, tmp_path / "wide.png", None, (Monochrome(None),))
 
     assert written.size == Size(20, 16)
     assert not written.shrunk
@@ -191,9 +193,9 @@ def test_convert_image_creates_the_output_folder(tmp_path):
     source = tmp_path / "a.png"
     Image.new("RGB", (2, 2)).save(source)
 
-    convert_image(source, tmp_path / "deep" / "deeper" / "a.bmp")
+    convert_image(source, tmp_path / "deep" / "deeper" / "a.png")
 
-    assert (tmp_path / "deep" / "deeper" / "a.bmp").exists()
+    assert (tmp_path / "deep" / "deeper" / "a.png").exists()
 
 
 # --- finding the input ---------------------------------------------------
@@ -213,7 +215,7 @@ def test_find_images_picks_up_images_and_skips_the_rest(tmp_path):
 def convert(source_size, box, tmp_path):
     path = tmp_path / "in.png"
     Image.new("RGB", source_size, BLACK).save(path)
-    return convert_image(path, tmp_path / "out.bmp", box, (Monochrome(None),))
+    return convert_image(path, tmp_path / "out.png", box, (Monochrome(None),))
 
 
 @pytest.mark.parametrize(
