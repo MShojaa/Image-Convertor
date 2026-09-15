@@ -102,17 +102,26 @@ class Blur(Effect):
 
 @dataclass(frozen=True)
 class Noise(Effect):
-    """Uniform noise, added to the grey level of every pixel.
+    """Uniform noise, added to every pixel, in whatever colour the image is.
 
     Uniform rather than Gaussian: it is one number to expose and one number to
     reason about -- every pixel moves by at most `amount`, either way -- where
     Gaussian needs a standard deviation and still has no bound. Film grain is
     the argument for Gaussian, and this is not a film grain tool.
 
-    The image is converted to grey first, because the next effect that matters
-    is monochrome, which would throw the colour away anyway. Noising three
-    channels independently produces colour speckle that grey then averages
-    back out -- more work for a result nobody asked for.
+    **The same noise goes on every channel**, which is what keeps a colour
+    image colour. Rolling a separate number per channel moves the channels
+    apart from each other, and moving R away from G *is* a change of hue: a
+    grey wall comes back speckled pink and green. One value per pixel added to
+    all three shifts each pixel lighter or darker and leaves its colour alone,
+    which is what noise on a photograph is meant to look like.
+
+    Alpha is left out of it. Noising transparency would make a clean edge
+    fizzle, and nothing about "add noise" says the shape should change.
+
+    It used to convert to grey first, on the grounds that monochrome came next
+    and would throw the colour away anyway -- true only when monochrome is
+    actually picked, which it no longer always is.
 
     It runs after blur. Blur over noise is just a quieter noise, which is not
     what either effect says it does.
@@ -134,26 +143,52 @@ class Noise(Effect):
         if self.amount == 0:
             return image
 
-        grey = image.convert("L")
+        # A palette has no channels to add to; RGB is the honest reading of
+        # one, and is what the rest of the pipeline works in anyway.
+        if image.mode == "P":
+            image = image.convert("RGBA" if "transparency" in image.info else "RGB")
+        elif image.mode == "1":
+            # Two levels plus noise is two levels again -- adding to a 1-bit
+            # image and staying 1-bit would do nothing at all.
+            image = image.convert("L")
 
-        # A whole-image operation, not a loop over pixels. The obvious version
-        # -- read a pixel, add a random number, write it back -- is a Python
-        # loop per pixel, which is fine on an icon and takes tens of seconds on
-        # a photograph. This builds the noise as an image and lets Pillow add
-        # the two in C.
-        #
-        # A generator of our own rather than the module-level one: seeding
-        # `random` globally would reach into whatever else the process is
-        # doing, which in the tests is pytest.
+        noise = self._noise_for(image.size)
+
+        if image.mode == "L":
+            return self._add(image, noise)
+
+        # The same noise on every colour channel, and none on alpha.
+        bands = [
+            band if name == "A" else self._add(band, noise)
+            for band, name in zip(image.split(), image.getbands())
+        ]
+        return Image.merge(image.mode, bands)
+
+    def _noise_for(self, size: tuple[int, int]) -> Image.Image:
+        """One channel of noise, 0..2*amount, the same every run for a seed.
+
+        A whole-image operation, not a loop over pixels. The obvious version --
+        read a pixel, add a random number, write it back -- is a Python loop
+        per pixel, which is fine on an icon and takes tens of seconds on a
+        photograph. This builds the noise as an image and lets Pillow add it
+        in C.
+
+        A generator of our own rather than the module-level one: seeding
+        `random` globally would reach into whatever else the process is doing,
+        which in the tests is pytest.
+        """
         rolls = random.Random(self.seed)
         span = 2 * self.amount + 1
-        noise = Image.frombytes("L", grey.size, rolls.randbytes(grey.width * grey.height))
+        noise = Image.frombytes("L", size, rolls.randbytes(size[0] * size[1]))
+        return noise.point(lambda value: value * span // 256)
 
-        # 0..255 scaled down to 0..2a, then ImageChops.add's offset shifts it
-        # to -a..+a. add() clamps rather than wrapping, which is the whole
-        # reason for using it: 250 + 30 has to be white, not 24.
-        noise = noise.point(lambda value: value * span // 256)
-        return ImageChops.add(grey, noise, scale=1.0, offset=-self.amount)
+    def _add(self, band: Image.Image, noise: Image.Image) -> Image.Image:
+        """One channel plus the noise, shifted to run either way and clamped.
+
+        ImageChops.add computes (a + b) + offset and clamps, which is the whole
+        reason for using it: 250 + 30 has to be white, not 24.
+        """
+        return ImageChops.add(band, noise, scale=1.0, offset=-self.amount)
 
     def described(self) -> str:
         if self.seed == DEFAULT_NOISE_SEED:

@@ -54,9 +54,11 @@ to come first.
 
     blur        gaussian blur, default 1 pixel; fractional radii are the
                 useful ones on a small image
-    noise       uniform noise, default 25 grey levels either way; the seed
+    noise       uniform noise, default 25 levels either way; the seed
                 defaults to 0, not the clock, so the same folder converts
-                the same way twice
+                the same way twice. The same noise goes on every colour
+                channel, so a colour image stays the colour it was --
+                only lighter and darker, pixel by pixel
     monochrome  black and white; with a threshold it is a hard cut, without
                 one it dithers
 

@@ -236,6 +236,8 @@ def test_a_blur_radius_that_is_not_a_number_is_refused():
 # --- noise ---------------------------------------------------------------
 
 def flat_grey(value=128, size=(12, 12)):
+    """A flat grey. RGB rather than L, because that is what the pipeline hands
+    an effect, and grey RGB keeps the old assertions about levels meaningful."""
     return Image.new("RGB", size, (value, value, value))
 
 
@@ -312,10 +314,60 @@ def test_noise_runs_after_blur_and_before_monochrome():
     )
 
 
-def test_noise_leaves_the_image_in_grey():
-    """The next effect that matters throws colour away; noising three channels
-    independently makes speckle grey would average back out."""
-    assert Noise(20).apply(Image.new("RGB", (4, 4), (200, 30, 30))).mode == "L"
+def test_noise_keeps_a_colour_image_in_colour():
+    """It used to convert to grey first, which was only defensible while
+    monochrome always came next. It no longer does."""
+    assert Noise(20).apply(Image.new("RGB", (4, 4), (200, 30, 30))).mode == "RGB"
+
+
+def test_noise_does_not_change_the_colour_it_lands_on():
+    """The same noise on every channel moves a pixel lighter or darker.
+    A separate roll per channel would move R away from G, which is a change
+    of hue: a grey wall comes back speckled pink and green."""
+    noised = Noise(30, seed=3).apply(Image.new("RGB", (16, 16), (200, 60, 60)))
+
+    pixels = noised.convert("RGB")
+    raw = pixels.tobytes()
+    gaps = {
+        (raw[i] - raw[i + 1], raw[i + 1] - raw[i + 2]) for i in range(0, len(raw), 3)
+    }
+    assert gaps == {(140, 0)}, "the channels moved apart from each other"
+
+
+def test_noise_still_moves_a_colour_image():
+    before = Image.new("RGB", (16, 16), (120, 90, 60))
+    after = Noise(30, seed=2).apply(before)
+
+    assert len(set(after.convert("L").tobytes())) > 1
+
+
+def test_noise_leaves_alpha_alone():
+    """Noising transparency makes a clean edge fizzle, and nothing about
+    "add noise" says the shape should change."""
+    noised = Noise(60, seed=1).apply(Image.new("RGBA", (8, 8), (10, 150, 10, 128)))
+
+    assert noised.mode == "RGBA"
+    assert set(noised.getchannel("A").tobytes()) == {128}
+
+
+def test_noise_keeps_a_grey_image_grey():
+    assert Noise(20).apply(Image.new("L", (4, 4), 128)).mode == "L"
+
+
+def test_noise_on_a_one_bit_image_gives_it_levels_to_move_in():
+    """Two levels plus noise is two levels again; staying 1-bit would do
+    nothing at all."""
+    result = Noise(40, seed=1).apply(Image.new("1", (16, 16), 1))
+
+    assert result.mode == "L"
+    assert len(set(result.tobytes())) > 1
+
+
+def test_noise_on_a_palette_image_works():
+    palette = Image.new("P", (8, 8), 3)
+    palette.putpalette([0, 0, 0] * 200 + [90, 120, 200] * 56)
+
+    assert Noise(20).apply(palette).mode in ("RGB", "RGBA")
 
 
 def test_noise_into_a_hard_cut_is_a_coarse_dither():
