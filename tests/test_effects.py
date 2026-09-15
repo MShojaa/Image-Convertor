@@ -11,11 +11,13 @@ import pytest
 from PIL import Image
 
 from image_convertor.effects import (
+    DEFAULT_NOISE_AMOUNT,
     DEFAULT_THRESHOLD,
     REGISTRY,
     Blur,
     Effect,
     Monochrome,
+    Noise,
     apply_effects,
     describe,
     order_effects,
@@ -229,3 +231,122 @@ def test_a_blur_radius_that_is_not_a_number_is_refused():
         parse_effect("blur:lots")
 
     assert "blur radius" in str(raised.value)
+
+
+# --- noise ---------------------------------------------------------------
+
+def flat_grey(value=128, size=(12, 12)):
+    return Image.new("RGB", size, (value, value, value))
+
+
+def levels(image):
+    """Every pixel as a grey level.
+
+    Through tobytes() rather than getdata(), which Pillow has deprecated: an
+    "L" image is one byte per pixel, so the bytes are the levels.
+    """
+    return list(image.convert("L").tobytes())
+
+
+def test_noise_moves_pixels_off_a_flat_grey():
+    before = flat_grey()
+    after = Noise(40).apply(before)
+
+    assert set(levels(before)) == {128}
+    assert len(set(levels(after))) > 1
+
+
+def test_the_same_seed_gives_the_same_noise():
+    """Converting the same folder twice has to give the same files."""
+    once = Noise(40, seed=7).apply(flat_grey())
+    twice = Noise(40, seed=7).apply(flat_grey())
+
+    assert levels(once) == levels(twice)
+
+
+def test_a_different_seed_gives_different_noise():
+    assert levels(Noise(40, seed=1).apply(flat_grey())) != levels(
+        Noise(40, seed=2).apply(flat_grey())
+    )
+
+
+def test_the_default_seed_is_fixed_not_the_clock():
+    """The whole reason the seed exists: no seed must still be reproducible."""
+    assert levels(Noise(40).apply(flat_grey())) == levels(Noise(40).apply(flat_grey()))
+
+
+def test_the_amount_bounds_how_far_a_pixel_moves():
+    values = set(levels(Noise(10, seed=3).apply(flat_grey(128))))
+
+    assert values, "no pixels came back"
+    assert min(values) >= 118 and max(values) <= 138
+
+
+def test_noise_does_not_wrap_at_the_ends():
+    """255 + noise must clamp to white, not roll round to black."""
+    light = set(levels(Noise(60, seed=1).apply(flat_grey(250))))
+    dark = set(levels(Noise(60, seed=1).apply(flat_grey(5))))
+
+    assert max(light) == 255 and min(light) > 150
+    assert min(dark) == 0 and max(dark) < 105
+
+
+def test_a_zero_amount_changes_nothing():
+    assert levels(Noise(0).apply(flat_grey())) == [128] * 144
+
+
+@pytest.mark.parametrize("amount", [-1, 256])
+def test_an_amount_outside_the_grey_range_is_refused(amount):
+    with pytest.raises(ValueError):
+        Noise(amount)
+
+
+def test_noise_runs_after_blur_and_before_monochrome():
+    """Blur over noise is a quieter noise, which is not what either flag says."""
+    assert Blur.order < Noise.order < Monochrome.order
+
+    assert order_effects((Monochrome(128), Noise(20), Blur(1))) == (
+        Blur(1),
+        Noise(20),
+        Monochrome(128),
+    )
+
+
+def test_noise_leaves_the_image_in_grey():
+    """The next effect that matters throws colour away; noising three channels
+    independently makes speckle grey would average back out."""
+    assert Noise(20).apply(Image.new("RGB", (4, 4), (200, 30, 30))).mode == "L"
+
+
+def test_noise_into_a_hard_cut_is_a_coarse_dither():
+    """A flat grey plus noise, cut at the middle, comes out as scattered dots."""
+    result = apply_effects(flat_grey(128), (Noise(60, seed=4), Monochrome(128)))
+    values = set(levels(result))
+
+    assert result.mode == "1"
+    assert values == {0, 255}, "a hard cut leaves two levels"
+
+
+# --- the settings after the name -----------------------------------------
+
+def test_a_second_setting_is_read_in_order():
+    assert parse_effect("noise:40:7") == Noise(40, 7)
+
+
+def test_an_omitted_setting_takes_its_default():
+    """"noise::7" is the default amount with a chosen seed, not an error."""
+    assert parse_effect("noise::7") == Noise(DEFAULT_NOISE_AMOUNT, 7)
+
+
+def test_too_many_settings_says_what_the_effect_takes():
+    with pytest.raises(ValueError) as raised:
+        parse_effect("noise:1:2:3")
+
+    assert "amount, seed" in str(raised.value)
+
+
+def test_the_default_seed_is_left_out_of_the_description():
+    """describe() is re-typable, and a seed nobody chose is noise in the line."""
+    assert Noise(40).described() == "noise:40"
+    assert Noise(40, 7).described() == "noise:40:7"
+    assert parse_effect(Noise(40, 7).described()) == Noise(40, 7)

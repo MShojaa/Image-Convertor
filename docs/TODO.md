@@ -31,25 +31,31 @@ anything -- a 1-bit image has no levels between black and white left to smear.
 The README says which pairing is worth reaching for (blur into a hard cut,
 for a soft-edged threshold) and which does nothing (blur into a dither).
 
-## 2. A noise effect
+## 2. A noise effect -- DONE
 
-Add noise, as one of the conversion types.
+`Noise(amount, seed)` in `effects.py`, at order 20 -- after blur, because
+blur over noise is just a quieter noise, and before monochrome.
 
-- **Kind.** Decide and write it down: uniform, or Gaussian. Uniform is simpler
-  to reason about and easier to expose (one amount, 0-255). Gaussian looks more
-  like film grain. Start with uniform unless there is a reason not to.
-- **Amount.** One number, the maximum deviation per pixel. It applies to the
-  greyscale image, not per channel, since the next step is greyscale anyway.
-- **Where in the pipeline.** After the fit, and after blur if both are on --
-  noise then blur is just a softer noise, which is not what either flag says it
-  does.
-- **Determinism.** This is the one that matters for the tests. Noise with no
-  seed makes a test that can only assert "something changed". Take a `--seed`,
-  default to a fixed value rather than to the clock, and the output is
-  reproducible -- which is also what a user converting the same folder twice
-  expects.
-- **Watch for.** Noise before a hard cut is a hand-rolled dither, and a coarse
-  one. Say that in the README next to the blur note.
+**Uniform, not Gaussian.** One number to expose and one to reason about:
+every pixel moves by at most `amount`, either way. Gaussian needs a standard
+deviation and still has no bound; film grain is the argument for it, and this
+is not a film grain tool.
+
+**The seed defaults to 0, not the clock.** Seeding from the clock is the usual
+default and is the wrong one here -- converting the same folder twice has to
+give the same files, and a test of unseeded noise can only assert that
+something changed. `--effect noise:40:7` picks a different one.
+
+**It is a whole-image operation, not a loop.** The obvious version -- read a
+pixel, add a random number, write it back -- is a Python loop per pixel: fine
+on an icon, tens of seconds on a photograph. Instead the noise is built as an
+image from `Random.randbytes`, scaled to the amount, and added with
+`ImageChops.add`, which clamps rather than wrapping -- 250 + 30 has to be
+white, not 24. A 4000x3000 image takes about a tenth of a second.
+
+It converts to grey first, because monochrome would throw the colour away
+anyway and noising three channels independently makes speckle that grey
+averages back out.
 
 ## 3. An output format
 
