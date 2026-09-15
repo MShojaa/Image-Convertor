@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <title>Image Convertor</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main id="app">
+    <header class="app-header">
+      <h1>Image Convertor</h1>
+      <div class="header-actions">
+        <span id="theme-label" class="hint">Dark</span>
+        <button type="button" id="theme-toggle" class="button secondary" aria-pressed="true">
+          Switch theme
+        </button>
+      </div>
+    </header>
+
+    <section class="panel" aria-labelledby="source-heading">
+      <h2 id="source-heading" class="label">Images</h2>
+      <div class="row">
+        <input type="text" id="folder" class="control grow mono" spellcheck="false"
+               aria-label="Folder to read images from" placeholder="No folder chosen">
+        <button type="button" id="browse" class="button secondary">Browse</button>
+      </div>
+      <p id="folder-status" class="hint" role="status"></p>
+    </section>
+
+    <section class="panel" aria-labelledby="output-heading">
+      <h2 id="output-heading" class="label">Output</h2>
+      <div class="row">
+        <div class="field">
+          <label for="size">Resize to</label>
+          <input type="text" id="size" class="control mono" placeholder="no resizing"
+                 spellcheck="false" aria-describedby="size-hint">
+        </div>
+        <div class="field">
+          <label for="format">Format</label>
+          <select id="format" class="control"></select>
+        </div>
+      </div>
+      <p id="size-hint" class="hint">
+        Width x height. Images keep their aspect ratio and are centred on white
+        in the box; nothing is enlarged.
+      </p>
+      <p id="format-note" class="hint"></p>
+    </section>
+
+    <section class="panel" aria-labelledby="effects-heading">
+      <h2 id="effects-heading" class="label">Effects</h2>
+      <p class="hint">Applied in this order, whichever you pick.</p>
+      <ul id="effects" class="effects"></ul>
+    </section>
+
+    <section class="panel run" aria-labelledby="run-heading">
+      <h2 id="run-heading" class="label">Run</h2>
+      <div class="row">
+        <button type="button" id="convert" class="button primary">Convert</button>
+        <button type="button" id="cancel" class="button secondary" hidden>Cancel</button>
+        <span id="counter" class="hint mono" role="status" aria-live="polite"></span>
+      </div>
+      <div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100"
+           aria-valuenow="0" aria-label="Conversion progress">
+        <div id="progress-bar" class="progress-bar"></div>
+      </div>
+      <p id="summary" class="summary" role="status" aria-live="polite"></p>
+      <div id="log" class="log mono" role="log" aria-label="Conversion log" tabindex="0"></div>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

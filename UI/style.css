@@ -1,0 +1,337 @@
+/* Every value here comes from docs/design-system.md. Nothing below the :root
+   blocks may hardcode a colour, a radius or a spacing -- if a value is not a
+   token, add it to that file first. That rule is the whole reason the light
+   theme is a second block of values rather than a second stylesheet. */
+
+:root {
+  /* Surfaces. Depth on dark comes from getting lighter as it comes forward;
+     shadows are invisible on near-black. */
+  --surface-sunken: #141517;
+  --surface: #1c1e21;
+  --surface-raised: #26292e;
+  --border: #33373d;
+  --border-strong: #454a52;
+
+  /* Text. Not white -- #fff on the sunken surface buzzes on an OLED panel,
+     and this is still about 13:1. */
+  --text: #e6e8ea;
+  --text-dim: #9aa1a9;
+  --text-faint: #6b727a;
+
+  --accent: #5b9dd9;
+  --accent-hover: #72adde;
+  --accent-text: #0d1117;
+
+  --good: #5cb176;
+  --warn: #d6a14a;
+  --bad: #d97070;
+
+  --font: system-ui, "Segoe UI Variable", "Segoe UI", sans-serif;
+  --font-mono: "Cascadia Mono", "Consolas", ui-monospace, monospace;
+  --text-lg: 1.0625rem;
+  --text-base: 0.875rem;
+  --text-sm: 0.8125rem;
+  --text-xs: 0.75rem;
+  --weight-normal: 400;
+  --weight-medium: 500;
+  --weight-bold: 600;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+
+  --radius: 6px;
+  --radius-sm: 4px;
+  --control-height: 32px;
+
+  --fast: 120ms;
+  --slow: 240ms;
+
+  color-scheme: dark;
+}
+
+/* The light theme is docs/design-system.md item 6 and lands here: a second
+   block redefining the tokens above, chosen for light rather than inverted. */
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--surface-sunken);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: var(--text-base);
+  font-weight: var(--weight-normal);
+  -webkit-font-smoothing: antialiased;
+}
+
+#app {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  min-height: 100vh;
+}
+
+/* -- header ------------------------------------------------------------ */
+
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.app-header h1 {
+  margin: 0;
+  font-size: var(--text-lg);
+  font-weight: var(--weight-bold);
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* -- panels ------------------------------------------------------------ */
+
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--space-3) var(--space-4) var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.panel.run {
+  flex: 1;
+  min-height: 0;   /* so the log can scroll instead of pushing the window */
+}
+
+.label {
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.hint {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--text-dim);
+}
+
+.mono { font-family: var(--font-mono); }
+
+.row {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.grow { flex: 1; min-width: 12rem; }
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.field label {
+  font-size: var(--text-xs);
+  color: var(--text-dim);
+}
+
+/* -- controls ---------------------------------------------------------- */
+
+.control,
+.button {
+  height: var(--control-height);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--surface-raised);
+  color: var(--text);
+  font-family: inherit;
+  font-size: var(--text-base);
+  padding: 0 var(--space-3);
+  transition: border-color var(--fast) ease-out, background var(--fast) ease-out;
+}
+
+.control::placeholder { color: var(--text-faint); }
+
+.control:hover:not(:disabled),
+.button:hover:not(:disabled) { border-color: var(--border-strong); }
+
+/* An outline, not a border: focus never changes an element's size, so
+   nothing shifts as you tab through. :focus-visible so it is the keyboard's,
+   not the mouse's -- and it is never removed without a replacement. */
+.control:focus-visible,
+.button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-color: var(--border-strong);
+}
+
+.button {
+  cursor: pointer;
+  font-weight: var(--weight-medium);
+  white-space: nowrap;
+}
+
+.button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-text);
+}
+
+.button.primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+
+/* Not opacity: on a dark theme that gives muddy-but-readable text, and the
+   point of disabled is that it reads as unavailable at a glance. */
+.button:disabled {
+  background: var(--surface);
+  color: var(--text-faint);
+  cursor: default;
+}
+
+/* -- effects ----------------------------------------------------------- */
+
+.effects {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.effect {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.effect > label:first-child {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 9rem;
+  cursor: pointer;
+}
+
+.effect input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+/* The settings stay visible rather than appearing on tick: a row that changes
+   height when checked moves everything below it. */
+.effect-settings {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  transition: color var(--fast) ease-out;
+}
+
+.effect-settings label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--text-xs);
+  color: var(--text-dim);
+}
+
+.effect-settings input {
+  width: 5rem;
+  height: var(--control-height);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--surface-raised);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  padding: 0 var(--space-2);
+}
+
+.effect[data-on="false"] .effect-settings { color: var(--text-faint); }
+.effect[data-on="false"] .effect-settings label { color: var(--text-faint); }
+.effect[data-on="false"] .effect-settings input {
+  color: var(--text-faint);
+  background: var(--surface);
+}
+
+/* -- progress ---------------------------------------------------------- */
+
+.progress {
+  height: 4px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-raised);
+  overflow: hidden;
+}
+
+.progress-bar {
+  height: 100%;
+  width: 0;
+  background: var(--accent);
+  transition: width var(--fast) ease-out;
+}
+
+.summary {
+  margin: 0;
+  font-size: var(--text-sm);
+  min-height: 1.2em;
+}
+
+.summary[data-kind="good"] { color: var(--good); }
+.summary[data-kind="warn"] { color: var(--warn); }
+.summary[data-kind="bad"]  { color: var(--bad); }
+
+/* -- log --------------------------------------------------------------- */
+
+.log {
+  flex: 1;
+  min-height: 6rem;
+  overflow-y: auto;
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--space-2);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  color: var(--text-dim);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Each kind says which it is in words as well as colour -- nothing here is
+   communicated by colour alone. */
+.log-line[data-kind="warn"] { color: var(--warn); }
+.log-line[data-kind="bad"]  { color: var(--bad); }
+.log-line[data-kind="good"] { color: var(--good); }
+
+/* -- reduced motion ---------------------------------------------------- */
+
+/* 0.01ms rather than 0: transition-end handlers still fire. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

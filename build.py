@@ -8,6 +8,7 @@ is what setup.bat uses to prove the environment can produce a working exe.
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -31,7 +32,19 @@ def check() -> bool:
     if not (ROOT / ".venv").exists():
         print("warn  No .venv -- run scripts\\setup.bat to get one")
 
-    for module, label in (("PIL", "Pillow"), ("PyInstaller", "PyInstaller")):
+    # The window loads index.html off disk, so a build that did not bundle it
+    # opens on a blank page -- which looks like a code fault and is not one.
+    if not (ROOT / "UI" / "index.html").is_file():
+        print("FAIL  UI\\index.html is missing")
+        ok = False
+    else:
+        print("ok    UI")
+
+    for module, label in (
+        ("PIL", "Pillow"),
+        ("webview", "pywebview"),
+        ("PyInstaller", "PyInstaller"),
+    ):
         try:
             __import__(module)
         except ImportError:
@@ -50,9 +63,16 @@ def build(extra: list[str]) -> int:
         "PyInstaller",
         "--noconfirm",
         "--clean",
-        "--console",
+        # A window, not a console: a GUI app that opens a black box behind
+        # itself looks broken, and there is no longer anything to print into it.
+        "--windowed",
         "--name",
         NAME,
+        # The page and its stylesheet are data, not code -- PyInstaller does
+        # not find them by following imports. main.py reads them back out of
+        # sys._MEIPASS, and the two have to agree on the folder name.
+        "--add-data",
+        f"{ROOT / 'UI'}{os.pathsep}UI",
         # Pillow pulls in tkinter through ImageTk; we never use it and it is a
         # few megabytes of DLLs that can fail to freeze cleanly.
         "--exclude-module",
