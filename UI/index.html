@@ -23,68 +23,76 @@
       </div>
     </header>
 
-<!-- One panel, not two: they are the same question asked twice, and a
-         heading between them only adds a row of height to say so. -->
-    <section class="panel" aria-labelledby="folders-heading">
-      <h2 id="folders-heading" class="label">Folders</h2>
+    <!-- Side by side when the window is wide enough, stacked when it is
+         not. The log lives in its own column so it gets the whole height
+         of the window rather than what the controls leave over. -->
+    <div class="workspace">
+      <div class="controls">
+  <!-- One panel, not two: they are the same question asked twice, and a
+           heading between them only adds a row of height to say so. -->
+      <section class="panel" aria-labelledby="folders-heading">
+        <h2 id="folders-heading" class="label">Folders</h2>
 
-      <div class="row">
-        <label class="folder-label" for="folder">Read from</label>
-        <input type="text" id="folder" class="control grow mono" spellcheck="false"
-               placeholder="No folder chosen">
-        <button type="button" id="browse" class="button secondary">Browse</button>
-      </div>
-      <p id="folder-status" class="hint folder-hint" role="status"></p>
-
-      <div class="row">
-        <label class="folder-label" for="output-folder">Write to</label>
-        <input type="text" id="output-folder" class="control grow mono" spellcheck="false">
-        <button type="button" id="browse-output" class="button secondary">Browse</button>
-        <button type="button" id="reset-output" class="button secondary">Default</button>
-      </div>
-      <p id="output-status" class="hint folder-hint" role="status"></p>
-    </section>
-
-    <section class="panel" aria-labelledby="output-heading">
-      <h2 id="output-heading" class="label">Output</h2>
-      <div class="row">
-        <div class="field">
-          <label for="size">Resize to</label>
-          <input type="text" id="size" class="control mono" placeholder="no resizing"
-                 spellcheck="false" aria-describedby="size-hint">
+        <div class="row">
+          <label class="folder-label" for="folder">Read from</label>
+          <input type="text" id="folder" class="control grow mono" spellcheck="false"
+                 placeholder="No folder chosen">
+          <button type="button" id="browse" class="button secondary">Browse</button>
         </div>
-        <div class="field">
-          <label for="format">Format</label>
-          <select id="format" class="control"></select>
+        <p id="folder-status" class="hint folder-hint" role="status"></p>
+
+        <div class="row">
+          <label class="folder-label" for="output-folder">Write to</label>
+          <input type="text" id="output-folder" class="control grow mono" spellcheck="false">
+          <button type="button" id="browse-output" class="button secondary">Browse</button>
+          <button type="button" id="reset-output" class="button secondary">Default</button>
         </div>
-      </div>
-      <p id="size-hint" class="hint">
-        Aspect ratio kept, centred on white in the box, never enlarged.
-      </p>
-      <p id="format-note" class="hint"></p>
-    </section>
+        <p id="output-status" class="hint folder-hint" role="status"></p>
+      </section>
 
-    <section class="panel" aria-labelledby="effects-heading">
-      <h2 id="effects-heading" class="label">Effects</h2>
-      <p class="hint">Numbered in the order they are applied.</p>
-      <ul id="effects" class="effects"></ul>
-      <p id="effect-chain" class="hint chain mono" role="status" aria-live="polite"></p>
-    </section>
+      <section class="panel" aria-labelledby="output-heading">
+        <h2 id="output-heading" class="label">Output</h2>
+        <div class="row">
+          <div class="field">
+            <label for="size">Resize to</label>
+            <input type="text" id="size" class="control mono" placeholder="no resizing"
+                   spellcheck="false" aria-describedby="size-hint">
+          </div>
+          <div class="field">
+            <label for="format">Format</label>
+            <select id="format" class="control"></select>
+          </div>
+        </div>
+        <p id="size-hint" class="hint">
+          Aspect ratio kept, centred on white in the box, never enlarged.
+        </p>
+        <p id="format-note" class="hint"></p>
+      </section>
 
-    <section class="panel run" aria-labelledby="run-heading">
-      <h2 id="run-heading" class="label">Run</h2>
-      <div class="row">
-        <button type="button" id="convert" class="button primary">Convert</button>
-        <button type="button" id="cancel" class="button secondary" hidden>Cancel</button>
-        <span id="counter" class="hint mono" role="status" aria-live="polite"></span>
+      <section class="panel" aria-labelledby="effects-heading">
+        <h2 id="effects-heading" class="label">Effects</h2>
+        <p class="hint">Numbered in the order they are applied.</p>
+        <ul id="effects" class="effects"></ul>
+        <p id="effect-chain" class="hint chain mono" role="status" aria-live="polite"></p>
+      </section>
       </div>
-      <div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100"
-           aria-valuenow="0" aria-label="Conversion progress">
-        <div id="progress-bar" class="progress-bar"></div>
-      </div>
-      <p id="summary" class="summary" role="status" aria-live="polite"></p>
-      <div id="log" class="log mono" role="log" aria-label="Conversion log" tabindex="0"></div>
-    </section>
+
+      <section class="panel run" aria-labelledby="run-heading">
+        <h2 id="run-heading" class="label">Run</h2>
+        <div class="row">
+          <button type="button" id="convert" class="button primary">Convert</button>
+          <button type="button" id="cancel" class="button secondary" hidden>Cancel</button>
+          <span id="counter" class="hint mono" role="status" aria-live="polite"></span>
+        </div>
+        <div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100"
+             aria-valuenow="0" aria-label="Conversion progress">
+          <div id="progress-bar" class="progress-bar"></div>
+        </div>
+        <p id="summary" class="summary" role="status" aria-live="polite"></p>
+        <div id="log" class="log mono" role="log" aria-label="Conversion log" tabindex="0"></div>
+      </section>
+    </div>
+
   </main>
 
   <script src="app.js"></script>

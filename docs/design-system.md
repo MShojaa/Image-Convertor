@@ -311,6 +311,19 @@ viewport and rounds up, which is one pixel of overflow and a scrollbar down the
 whole window to show it. That is not a hypothetical -- it is what the window
 did, and the fix is the percentage.
 
+## Two columns
+
+Past **62rem** the controls and the log sit side by side; below it they stack.
+That breakpoint is not a taste decision. Height is the scarce dimension -- a
+1080p screen at 125% scaling is 864 logical pixels tall and 1536 wide -- so the
+layout turns spare width into log height, and the log goes from six lines to
+about twenty-seven at the default size.
+
+Both columns can shrink and each scrolls inside itself. The run panel has a
+floor (`min-height: 12rem`) so a short window shrinks the controls rather than
+collapsing the panel and spilling the Convert button out of the bottom, which
+is exactly what happened when it had none.
+
 ## The window's size
 
 `main.py` decides it, and the numbers are measured rather than picked. The
@@ -319,10 +332,15 @@ per file and the only place a warning is explained, so it gets 240px rather
 than its minimum. That plus the window chrome is where 960 comes from, and the
 width is the widest row (786px) with slack for a long path.
 
-**The screen wins when it is smaller.** The wanted height is taller than the
-work area of a 1366x768 laptop, and asking for it there would put the bottom of
-the window -- where Convert is -- behind the taskbar. `window_size()` caps it,
-and `tests/test_window.py` checks the arithmetic on a range of screens.
+**The screen wins when it is smaller**, and the two are measured in different
+units -- which was a real bug and the reason the window scrolled. `create_window`
+takes logical pixels, the same ones CSS uses; `webview.screens` reports physical
+ones. At 125% scaling a 1920x1080 screen is 1536x864 logical, so asking for a
+940-tall window was asking for 1175 physical pixels on a screen with 1080.
+Windows clamped it, the page opened shorter than it needed, and it scrolled.
+
+`window_size()` divides the screen by `display_scale()` before comparing, and
+`tests/test_window.py` checks the arithmetic on a range of screens and scalings.
 
 ## What this file does not cover
 

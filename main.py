@@ -23,22 +23,21 @@ from image_convertor.webapi import Api
 
 WINDOW_TITLE = "Image Convertor"
 
-# What the page actually needs. Measured rather than picked: the controls come
-# to 684px with the log at its 6rem minimum, and the log is the part worth
-# having room -- it is one line per file and the only place a warning is
-# explained. 240px of it plus the controls plus the window chrome is where 960
-# comes from. The width is the widest row (786px) with slack for a long path.
-WANTED_SIZE = (920, 960)
+# What the page actually needs. Wide rather than tall, because past 62rem the
+# layout puts the controls and the log side by side -- and height is the scarce
+# one: a 1080p screen at 125% scaling is only 864 logical pixels tall, where it
+# is 1536 wide. Two columns turn the spare width into log height.
+WANTED_SIZE = (1220, 860)
 
 # Small enough to still be usable on a laptop, large enough that the layout
 # does not collapse into a column of squeezed panels.
 MIN_SIZE = (720, 560)
 
-# Left for the taskbar and the window's own titlebar and borders. webview
-# reports the whole screen, not the work area, so a window sized to the full
-# height would have its bottom edge behind the taskbar -- and the Convert
-# button is at the bottom.
-SCREEN_MARGIN = (80, 140)
+# Left for the taskbar and the window's own titlebar and borders, in the same
+# logical pixels as everything else here. webview reports the whole screen, not
+# the work area, so a window sized to the full height would have its bottom edge
+# behind the taskbar -- and the Convert button is at the bottom.
+SCREEN_MARGIN = (64, 96)
 
 
 def base_folder() -> Path:
@@ -47,19 +46,44 @@ def base_folder() -> Path:
     return Path.cwd()
 
 
+def display_scale() -> float:
+    """How many physical pixels Windows draws per logical one.
+
+    1.25 at the 125% display scaling that is the Windows default on a 1080p
+    laptop, and the reason this function exists at all.
+    """
+    try:
+        import ctypes
+
+        return ctypes.windll.user32.GetDpiForSystem() / 96.0
+    except Exception:
+        # Not Windows, or too old to ask. 1.0 makes the caller behave exactly
+        # as it did before this was here.
+        return 1.0
+
+
 def window_size() -> tuple[int, int]:
     """As big as the page wants, and never bigger than the screen.
 
-    The wanted height is taller than the work area of a 1366x768 laptop, which
-    is still a common machine. Asking for it there would put the bottom of the
-    window -- where the Convert button is -- underneath the taskbar, so the
-    screen wins whenever it is smaller.
+    **The two are measured in different units, and that was a real bug.**
+    `create_window` takes logical pixels -- the same ones CSS uses -- while
+    `webview.screens` reports physical ones. At 125% scaling a 1920x1080 screen
+    is 1536x864 logical, so asking for a 940-tall window was asking for 1175
+    physical pixels on a screen with 1080. Windows clamped it, the page came up
+    shorter than it needed, and it scrolled.
+
+    So the screen is converted into logical pixels before anything is compared,
+    and the margin below is in logical pixels too.
     """
     wanted_width, wanted_height = WANTED_SIZE
 
     try:
         screen = webview.screens[0]
-        available = (screen.width - SCREEN_MARGIN[0], screen.height - SCREEN_MARGIN[1])
+        scale = display_scale()
+        available = (
+            int(screen.width / scale) - SCREEN_MARGIN[0],
+            int(screen.height / scale) - SCREEN_MARGIN[1],
+        )
     except Exception:
         # No screen to ask -- take what the page wants and let the window
         # manager sort it out rather than failing to open at all.
