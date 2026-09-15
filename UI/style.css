@@ -158,6 +158,44 @@ body {
   gap: var(--space-2);
 }
 
+/* The two columns. Stacked by default -- a narrow window has no width to
+   spare -- and side by side once there is room, which is where the log stops
+   being a strip at the bottom and becomes a column of its own. */
+.workspace {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.controls {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  /* Shrinkable, and scrolling inside itself when it has to. Without this a
+     short window pushes the Convert button off the bottom instead: the
+     controls are as tall as their contents and something has to give. */
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+@media (min-width: 62rem) {
+  .workspace {
+    flex-direction: row;
+    align-items: stretch;
+  }
+
+  .controls {
+    flex: 0 1 30rem;
+  }
+
+  .panel.run {
+    flex: 1 1 26rem;
+  }
+}
+
 /* -- panels ------------------------------------------------------------ */
 
 /* Tight on purpose. Every pixel spent here is a pixel the log does not get,
@@ -179,8 +217,11 @@ body {
    bigger. min-height: 0 is what lets it shrink below its content and scroll
    instead of pushing the page taller. */
 .panel.run {
-  flex: 1;
-  min-height: 0;
+  flex: 1 1 auto;
+  /* A floor, so a short window shrinks the controls instead of collapsing
+     this panel to nothing and spilling the Convert button out of the bottom
+     of the window -- which is what min-height: 0 here did. */
+  min-height: 12rem;
 }
 
 .label {
@@ -403,9 +444,10 @@ body {
 .log {
   flex: 1;
   /* A floor, not a target: `flex: 1` above is what actually sizes it, and it
-     takes every pixel the panels above do not use. This is only what it may
-     not go below -- eight lines, where it used to be four. */
-  min-height: 8rem;
+     takes every pixel the rest of the panel does not use -- which, with the
+     two-column layout, is most of the window. Low enough that a deliberately
+     small window shrinks it rather than overflowing. */
+  min-height: 5rem;
   overflow-y: auto;
   background: var(--surface-sunken);
   border: 1px solid var(--border);
