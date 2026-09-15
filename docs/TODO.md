@@ -84,25 +84,37 @@ In a batch the refusal fails that one file and the run carries on, which is
 how an unreadable file already behaved -- a mixed folder converted to "the
 same as the input" should not be stopped by the one jpg in it.
 
-## 4. An option for the input folder
+## 4. An option for the input folder -- DONE
 
-Choose where images are read from, without editing anything.
+The old entry had this right: the mechanism already existed (`--input`,
+`base_folder()`), and what was missing was **remembering the answer**. So the
+work was the config file, which items 5 and 6 also wanted.
 
-- **Default: `input\` beside the executable**, which is what happens today.
-  `--input FOLDER` already exists as a flag and `base_folder()` already resolves
-  "beside the executable" correctly for both the frozen exe and a source run --
-  so this item is not about the mechanism, it is about **remembering the
-  answer**.
-- **What is actually missing.** A user who keeps their images somewhere else
-  retypes the path every run. The options, in increasing order of work: ask for
-  it interactively when `input\` exists too (today the question only appears when
-  it does not); remember the last answer in a small config file beside the
-  executable; or both.
-- **Decide the config question first.** A config file is the first piece of
-  persistent state this app would have, and the GUI in item 5 will want one too
-  (window size, theme, last folder). Worth designing once, for both, rather than
-  writing a one-line JSON dump here and a different one there. Where it lives
-  matters for the frozen build: beside the exe, not in the unpack folder.
+`image_convertor/settings.py`, one JSON file at
+`%LOCALAPPDATA%\Image-Convertor\settings.json`. The profile rather than
+beside the exe: the install folder is not reliably writable, and a rebuilt or
+moved exe would lose everything.
+
+Resolution order for the input folder is now `--input`, then `input\` beside
+the app, then the folder used last time, then ask. The remembered one is
+checked rather than trusted -- still a folder, still has images -- because it
+is the setting most likely to have stopped being true since it was written.
+
+**Every read is defensive, and that is the design.** A settings file can be
+hand-edited, half-written by a machine that lost power, or left by a newer
+version. None of that raises: a bad file reads as no file, and one bad key
+costs only that key. A convenience that refuses to start is worse than no
+convenience.
+
+`--no-remember` opts a run out of both reading and writing, for scripts.
+
+Also landed here: `tests/conftest.py` points the settings folder at a tmp
+directory for every test automatically. It is autouse because a test that
+forgot would write to the developer's own profile and pass, and the next run
+would read it back and fail somewhere else entirely -- which is exactly what
+happened while writing this.
+
+Still stored but unused: `theme`, which item 6 reads.
 
 ## 5. A GUI, with pywebview
 

@@ -10,7 +10,7 @@ import argparse
 import pytest
 from PIL import Image
 
-from image_convertor import cli
+from image_convertor import cli, settings
 from image_convertor.converter import Size
 from image_convertor.effects import DEFAULT_THRESHOLD, Monochrome
 
@@ -398,3 +398,131 @@ def test_the_format_is_printed_before_the_run(tmp_path, monkeypatch, capsys):
 
     cli.main(["--size", "", "--effect", "none", "--format", "png"])
     assert "Format:  png" in capsys.readouterr().out
+
+
+# --- remembering between runs --------------------------------------------
+
+def test_a_run_remembers_what_it_used(tmp_path, monkeypatch):
+    make_input(tmp_path, {"a.png": (8, 8)})
+    monkeypatch.setattr(cli, "base_folder", lambda: tmp_path)
+
+    cli.main(["--size", "16x16", "--effect", "blur:2", "--format", "png"])
+
+    stored = settings.load()
+    assert stored.size == "16x16"
+    assert stored.output_format == "png"
+    assert stored.effects == ("blur:2",)
+
+
+def test_the_folder_beside_the_app_is_not_remembered_as_a_path(tmp_path, monkeypatch):
+    """It is wherever the app is, so storing today's path would be wrong tomorrow."""
+    make_input(tmp_path, {"a.png": (8, 8)})
+    monkeypatch.setattr(cli, "base_folder", lambda: tmp_path)
+
+    cli.main(["--size", "", "--effect", "none"])
+
+    assert settings.load().input_folder == ""
+
+
+def test_a_folder_given_with_input_is_remembered(tmp_path, monkeypatch):
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    Image.new("RGB", (4, 4)).save(elsewhere / "only.png")
+    base = tmp_path / "app"
+    base.mkdir()
+    monkeypatch.setattr(cli, "base_folder", lambda: base)
+
+    cli.main(["--input", str(elsewhere), "--size", "", "--effect", "none"])
+
+    assert settings.load().input_folder == str(elsewhere)
+
+
+def test_the_remembered_folder_is_used_when_there_is_no_input_folder(tmp_path, monkeypatch, capsys):
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    Image.new("RGB", (4, 4)).save(elsewhere / "only.png")
+    base = tmp_path / "app"
+    base.mkdir()
+    monkeypatch.setattr(cli, "base_folder", lambda: base)
+    monkeypatch.setattr(cli, "ask", lambda prompt="": pytest.fail("should not ask"))
+    settings.save(settings.Settings(input_folder=str(elsewhere)))
+
+    assert cli.main(["--size", "", "--effect", "none"]) == 0
+    assert "from last time" in capsys.readouterr().out
+    assert output_files(base) == ["only.png"]
+
+
+def test_a_remembered_folder_that_is_gone_falls_back_to_asking(tmp_path, monkeypatch, answers):
+    """The setting most likely to have stopped being true since it was written."""
+    real = tmp_path / "real"
+    real.mkdir()
+    Image.new("RGB", (4, 4)).save(real / "one.png")
+    base = tmp_path / "app"
+    base.mkdir()
+    monkeypatch.setattr(cli, "base_folder", lambda: base)
+    settings.save(settings.Settings(input_folder=str(tmp_path / "long-gone")))
+    answers(str(real), "", "1")
+
+    assert cli.main([]) == 0
+    assert output_files(base) == ["one.png"]
+
+
+def test_a_remembered_folder_with_no_images_left_falls_back_to_asking(tmp_path, monkeypatch, answers):
+    emptied = tmp_path / "emptied"
+    emptied.mkdir()
+    real = tmp_path / "real"
+    real.mkdir()
+    Image.new("RGB", (4, 4)).save(real / "one.png")
+    base = tmp_path / "app"
+    base.mkdir()
+    monkeypatch.setattr(cli, "base_folder", lambda: base)
+    settings.save(settings.Settings(input_folder=str(emptied)))
+    answers(str(real), "", "1")
+
+    assert cli.main([]) == 0
+
+
+def test_the_folder_beside_the_app_wins_over_the_remembered_one(tmp_path, monkeypatch):
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    Image.new("RGB", (4, 4)).save(elsewhere / "wrong.png")
+    make_input(tmp_path, {"right.png": (8, 8)})
+    monkeypatch.setattr(cli, "base_folder", lambda: tmp_path)
+    settings.save(settings.Settings(input_folder=str(elsewhere)))
+
+    cli.main(["--size", "", "--effect", "none"])
+
+    assert output_files(tmp_path) == ["right.png"]
+
+
+def test_no_remember_neither_reads_nor_writes(tmp_path, monkeypatch, answers):
+    """For a scripted run that should not change what the next one does."""
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    Image.new("RGB", (4, 4)).save(elsewhere / "one.png")
+    base = tmp_path / "app"
+    base.mkdir()
+    monkeypatch.setattr(cli, "base_folder", lambda: base)
+    settings.save(settings.Settings(input_folder=str(elsewhere), size="99x99"))
+
+    # It does not read: the remembered folder is ignored and it asks instead.
+    answers(str(elsewhere), "", "1")
+    assert cli.main(["--no-remember"]) == 0
+
+    # And it does not write: the stored size is untouched.
+    assert settings.load().size == "99x99"
+
+
+def test_a_run_that_converted_nothing_does_not_overwrite_the_memory(tmp_path, monkeypatch):
+    """An empty folder should not replace a good remembered one."""
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    base = tmp_path / "app"
+    base.mkdir()
+    monkeypatch.setattr(cli, "base_folder", lambda: base)
+    settings.save(settings.Settings(input_folder=r"D:\somewhere", size="8x8"))
+
+    assert cli.main(["--input", str(empty), "--size", "", "--effect", "none"]) == 1
+
+    assert settings.load().input_folder == r"D:\somewhere"
+    assert settings.load().size == "8x8"
