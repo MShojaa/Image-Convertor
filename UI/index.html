@@ -3,12 +3,18 @@
 <head>
   <meta charset="utf-8">
   <title>Image Convertor</title>
+  <link rel="icon" href="logo.png">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <main id="app">
     <header class="app-header">
-      <h1>Image Convertor</h1>
+      <h1>
+        <!-- Decorative: the heading beside it already says the name, and a
+             screen reader repeating it would be noise. -->
+        <img src="logo.png" class="logo" alt="" width="28" height="28">
+        Image Convertor
+      </h1>
       <div class="header-actions">
         <span id="theme-label" class="hint">System</span>
         <button type="button" id="theme-toggle" class="button secondary">

@@ -40,6 +40,14 @@ def check() -> bool:
     else:
         print("ok    UI")
 
+    # A missing icon does not fail the build the way a missing page does --
+    # PyInstaller just refuses the flag, and an exe with the default icon is
+    # still an exe. Worth saying out loud all the same.
+    if not (ROOT / "assets" / "icon.ico").is_file():
+        print("warn  assets\\icon.ico is missing -- run assets\\make_icon.py")
+    else:
+        print("ok    icon")
+
     for module, label in (
         ("PIL", "Pillow"),
         ("webview", "pywebview"),
@@ -73,6 +81,12 @@ def build(extra: list[str]) -> int:
         # sys._MEIPASS, and the two have to agree on the folder name.
         "--add-data",
         f"{ROOT / 'UI'}{os.pathsep}UI",
+        # The exe's icon, which on Windows is also the window's icon and the
+        # one the taskbar shows. pywebview's own `icon=` is GTK/QT only, so
+        # this is the whole story here -- and it is why a source run shows
+        # Python's icon instead.
+        "--icon",
+        str(ROOT / "assets" / "icon.ico"),
         # Pillow pulls in tkinter through ImageTk; we never use it and it is a
         # few megabytes of DLLs that can fail to freeze cleanly.
         "--exclude-module",

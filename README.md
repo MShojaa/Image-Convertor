@@ -15,6 +15,9 @@ images.
   at the end, where a run that shrank nothing at all is called out as such.
 - Effects are chosen, not compulsory: **blur**, **noise** and **monochrome**.
 
+The icon is drawn by `assets/make_icon.py` and committed; run it only if the
+design changes.
+
 ## Getting started
 
     scripts\setup.bat            once, creates .venv and installs everything
