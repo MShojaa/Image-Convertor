@@ -11,6 +11,7 @@
      swallowed and never turned into a generic message of our own. */
 
 const state = {
+  settingColumns: 0,
   folder: "",
   outputFolder: "",
   defaultOutputFolder: "",
@@ -72,7 +73,7 @@ function wire() {
     const answer = await window.pywebview.api.check_size(event.target.value);
     el("size-hint").dataset.kind = answer.ok ? "" : "bad";
     el("size-hint").textContent = answer.ok
-      ? "Width x height. Images keep their aspect ratio and are centred on white in the box; nothing is enlarged."
+      ? "Aspect ratio kept, centred on white in the box, never enlarged."
       : answer.error;
   });
 
@@ -117,17 +118,31 @@ function buildEffects(effects, remembered) {
     chosen.set(name, values);
   }
 
-  for (const effect of effects) {
-    const values = chosen.get(effect.name);
-    list.append(effectRow(effect, values));
-  }
+  /* The widest row decides how many setting columns the grid has, so all
+     rows share one set of column widths and every input lines up. */
+  state.settingColumns = Math.max(...effects.map((e) => e.settings.length), 0);
+  list.style.setProperty("--setting-columns", state.settingColumns);
+
+  effects.forEach((effect, index) => {
+    list.append(effectRow(effect, chosen.get(effect.name), index + 1));
+  });
+
+  showChain();
 }
 
-function effectRow(effect, values) {
+function effectRow(effect, values, step) {
   const row = document.createElement("li");
   row.className = "effect";
   row.dataset.name = effect.name;
   row.dataset.on = values ? "true" : "false";
+
+  /* The step number is the effect's place in the pipeline, not its place in
+     this list -- they happen to be the same because the list is built in
+     that order, and that is the point of showing it. */
+  const number = document.createElement("span");
+  number.className = "effect-step";
+  number.textContent = step;
+  number.setAttribute("aria-hidden", "true");
 
   const toggle = document.createElement("label");
   const box = document.createElement("input");
@@ -135,27 +150,52 @@ function effectRow(effect, values) {
   box.checked = Boolean(values);
   box.addEventListener("change", () => {
     row.dataset.on = box.checked ? "true" : "false";
+    showChain();
   });
   toggle.append(box, document.createTextNode(effect.name));
 
-  const settings = document.createElement("div");
-  settings.className = "effect-settings";
+  row.append(number, toggle);
 
+  /* Each setting is its own label and input placed directly in the row's
+     grid, rather than wrapped in a box of its own. The wrapper was what
+     stopped the inputs lining up: every row sized its own, so "radius" and
+     "threshold" pushed their boxes to different places. */
   effect.settings.forEach((setting, index) => {
     const label = document.createElement("label");
+    label.className = "setting-label";
+    label.textContent = setting.name;
+
     const input = document.createElement("input");
     input.type = "text";
+    input.className = "setting-input";
+    input.id = `setting-${effect.name}-${setting.name}`;
     input.dataset.setting = setting.name;
     input.value = (values && values[index]) || "";
     /* The placeholder is the effect's own default, so an empty box is not a
        question -- it says what will happen if it is left alone. */
     input.placeholder = setting.default === null ? "dither" : String(setting.default);
-    label.append(document.createTextNode(setting.name), input);
-    settings.append(label);
+    input.addEventListener("input", showChain);
+    label.htmlFor = input.id;
+
+    row.append(label, input);
   });
 
-  row.append(toggle, settings);
+  /* Every row occupies the same number of grid columns, so a row with one
+     setting does not let the next row's columns slide left. */
+  for (let spare = effect.settings.length; spare < state.settingColumns; spare += 1) {
+    row.append(document.createElement("span"), document.createElement("span"));
+  }
+
   return row;
+}
+
+/* What will actually run, in order, spelled the way the app would write it.
+   The numbered list says where each effect sits; this says what the run is. */
+function showChain() {
+  const chosen = chosenEffects();
+  el("effect-chain").textContent = chosen.length
+    ? `Will run: ${chosen.join("  \u2192  ")}`
+    : "No effects: images are resized and rewritten, nothing else.";
 }
 
 function chosenEffects() {

@@ -217,20 +217,31 @@ unavailable at a glance.
 
 ### The effect rows
 
-One row per effect: a checkbox, the name, and that effect's settings inline,
-which go `--text-faint` and non-interactive when the box is clear. The settings
-stay visible rather than appearing on tick -- a row that changes height when you
-check it moves everything below it, and this list is short enough that showing
-all of it costs nothing.
+**The whole list is one grid, and each row is `display: contents`.** That is not
+a flourish: a row-per-flexbox sizes its own labels, so "radius" and "threshold"
+are different widths and every row's input starts somewhere else. One grid gives
+every row the same columns, and the inputs line up down the panel.
 
-They are listed **in the order they run**, not the order they were added to the
-app, because that order is a real thing the user needs to know and a list is the
-cheapest place to say it.
+A row is a step number, a checkbox and name, then that effect's settings as
+label/input pairs. Rows with fewer settings pad with empty cells so the columns
+never slide. The settings go `--text-faint` when the box is clear but stay
+visible -- a row that changes height when you check it moves everything below it.
+
+They are listed **in the order they run**, and now numbered with it, because
+that order is a real thing the user needs to know and the list is the cheapest
+place to say it. Under the list, a line spells out what the current selection
+will actually do: `Will run: blur -> noise -> monochrome`.
 
 ### The log
 
 Monospace, `--text-sm`, one line per file, scrolling, with the newest at the
-bottom. Three line kinds, and each says which it is in words as well as colour:
+bottom.
+
+**It is the panel that grows.** Everything above it is as tall as its contents
+and the run panel takes what is left, so making the window bigger makes the log
+bigger rather than making the gaps bigger. Its `min-height` is a floor, not a
+target. The panels are deliberately tight for the same reason: every pixel of
+padding above is a pixel the log does not get. Three line kinds, and each says which it is in words as well as colour:
 
 - a plain conversion: `--text-dim`
 - a warning (`WARNING  ...`): `--warn`
