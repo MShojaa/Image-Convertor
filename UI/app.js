@@ -12,6 +12,7 @@
 
 const state = {
   folder: "",
+  theme: "system",
   effects: [],      // what the app told us exists, in the order they run
   formats: [],
   running: false,
@@ -290,16 +291,43 @@ function fail(message) {
   log(message, "bad");
 }
 
-/* -- theme -------------------------------------------------------------- */
+/* -- theme --------------------------------------------------------------- */
 
-function applyTheme(theme) {
-  document.documentElement.dataset.theme = theme;
-  el("theme-label").textContent = theme === "dark" ? "Dark" : "Light";
-  el("theme-toggle").setAttribute("aria-pressed", String(theme === "dark"));
+/* Three choices, two looks. "system" is a stored choice like the other two,
+   not the absence of one -- it is resolved against the OS every time it is
+   applied, so a window left open follows the OS changing under it.
+
+   Resolving here rather than in CSS is deliberate. A media query would need a
+   second copy of the light tokens to cover the system case, and the whole
+   design rests on there being exactly one block of values per theme. */
+
+const THEMES = ["system", "dark", "light"];
+const LIGHT_QUERY = window.matchMedia("(prefers-color-scheme: light)");
+
+function resolveTheme(choice) {
+  if (choice !== "system") return choice;
+  return LIGHT_QUERY.matches ? "light" : "dark";
 }
 
+function applyTheme(choice) {
+  state.theme = THEMES.includes(choice) ? choice : "system";
+  document.documentElement.dataset.theme = resolveTheme(state.theme);
+
+  const label = state.theme === "system"
+    ? `System (${resolveTheme(state.theme)})`
+    : state.theme[0].toUpperCase() + state.theme.slice(1);
+  el("theme-label").textContent = label;
+  el("theme-toggle").setAttribute("aria-label", `Theme: ${label}. Click to change.`);
+}
+
+/* Only while the choice is "system" -- someone who picked dark deliberately
+   does not want it reverting at sunrise. */
+LIGHT_QUERY.addEventListener("change", () => {
+  if (state.theme === "system") applyTheme("system");
+});
+
 async function toggleTheme() {
-  const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+  const next = THEMES[(THEMES.indexOf(state.theme) + 1) % THEMES.length];
   applyTheme(next);
   await window.pywebview.api.save_theme(next);
 }

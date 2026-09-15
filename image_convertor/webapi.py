@@ -128,9 +128,16 @@ class Api:
             return _fail(str(error))
         return _ok(size=str(box) if box else "")
 
+    THEMES = ("system", "dark", "light")
+
     def save_theme(self, theme: str) -> dict:
-        """The one setting the page writes on its own, as soon as it changes."""
-        if theme not in ("dark", "light"):
+        """The one setting the page writes on its own, as soon as it changes.
+
+        "system" is a stored choice like the other two, not the absence of one:
+        the page resolves it against the OS every time it is applied, so a
+        window left open follows the OS changing under it.
+        """
+        if theme not in self.THEMES:
             return _fail(f"Unknown theme: {theme}")
         settings.remember(theme=theme)
         return _ok(theme=theme)

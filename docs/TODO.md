@@ -159,27 +159,32 @@ came back 0 and `element.dataset.name` came back empty for elements that
 demonstrably existed, while `getAttribute()` and `outerHTML` on the same
 elements were correct. It cost an hour of chasing a bug that was not there.
 
-## 6. A light theme
+## 6. A light theme -- DONE
 
-The same window, in light.
+A second block of the same token names in `UI/style.css`, and nothing else --
+which is what writing `design-system.md` first bought.
 
-- **Item 5 is done and `design-system.md` is real**, so this is now what it was
-  meant to be: a second block redefining the tokens on `:root`. The stylesheet
-  hardcodes nothing, so nothing has to be undone first. The empty block and the
-  comment saying so are already in `UI/style.css`.
-- **The toggle already exists.** The button, `applyTheme()` and `save_theme()`
-  are written and the choice is already stored and read back at startup -- it
-  flips `data-theme` on the root and today nothing answers to `light`.
-- **Tokens, not a second stylesheet.** One set of CSS custom properties, two
-  sets of values, switched at the root. A duplicated stylesheet drifts within a
-  week.
-- **What it is not.** Not an inversion of the dark palette. Greys that read as
-  correct on dark read as dirty on light, and shadows that carry depth on light
-  do nothing on dark.
-- **Where the choice lives.** The config file from item 4, plus a decision about
-  whether to follow the OS setting by default. Follow-the-OS is the better
-  default and is one media query, but only if the app also lets it be overridden
-  -- the user who picked dark deliberately does not want it reverting at sunrise.
+- **Not an inversion.** No token shares a value between the themes. The accent
+  had to get darker rather than lighter: `#5b9dd9` is 2.6:1 on white, fine as a
+  block behind dark text and unreadable as the focus ring and button text it is
+  also used for.
+- **The depth rule flips**, as the old entry predicted: on light the sunken
+  surface is the grey one and the raised one is white.
+- **The OS is followed by default.** The stored setting is `system`, `dark` or
+  `light`, with `system` the default and resolved in JavaScript rather than by a
+  media query -- a query would need a second copy of the light tokens, and the
+  one rule holding the design together is that there is one block of values per
+  theme. The `matchMedia` listener re-resolves only while the choice is
+  `system`, so a deliberate choice sticks.
+
+`tests/test_theme.py` parses the stylesheet and checks the rules that cannot be
+seen by looking: that both themes define the same tokens, that nothing outside
+those blocks names a colour, that the depth rule flips, and that every
+foreground clears WCAG AA on every surface it appears on.
+
+That last one earned itself immediately. Two light values looked right and
+failed against the **sunken** surface -- the log's background, where the state
+colours are used and nowhere else -- at 4.35:1 and 2.92:1. Both were darkened.
 
 ## 7. Several effects on one run -- DONE
 

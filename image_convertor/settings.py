@@ -50,8 +50,11 @@ class Settings:
     #: The last effects, as they would be typed on the command line.
     effects: tuple[str, ...] = ()
 
-    #: "dark" or "light". Read by the GUI; the CLI has no use for it.
-    theme: str = "dark"
+    #: "system", "dark" or "light". "system" follows the OS setting, which
+    #: is the default because an app that ignores it is the odd one out --
+    #: but a deliberate choice has to stick, which is why this is three
+    #: values and not a boolean.
+    theme: str = "system"
 
 
 def folder() -> Path:

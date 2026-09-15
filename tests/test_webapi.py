@@ -424,13 +424,20 @@ def test_a_run_can_opt_out_of_remembering(app, images):
     assert settings.load().size == "99x99"
 
 
-def test_the_theme_is_saved_on_its_own(app):
-    assert app.save_theme("light") == {"ok": True, "theme": "light"}
-    assert settings.load().theme == "light"
+@pytest.mark.parametrize("theme", ["dark", "light", "system"])
+def test_the_theme_is_saved_on_its_own(app, theme):
+    assert app.save_theme(theme) == {"ok": True, "theme": theme}
+    assert settings.load().theme == theme
+
+
+def test_following_the_os_is_the_default(app):
+    """An app that ignores the OS setting is the odd one out."""
+    assert settings.Settings().theme == "system"
+    assert app.describe_app()["settings"]["theme"] == "system"
 
 
 def test_an_unknown_theme_is_refused(app):
     answer = app.save_theme("neon")
 
     assert answer["ok"] is False
-    assert settings.load().theme == "dark"
+    assert settings.load().theme == settings.Settings().theme

@@ -53,8 +53,46 @@
   color-scheme: dark;
 }
 
-/* The light theme is docs/design-system.md item 6 and lands here: a second
-   block redefining the tokens above, chosen for light rather than inverted. */
+/* The light theme: the same token names, values chosen for light rather than
+   inverted from the dark ones. Two things are genuinely different, not just
+   lighter -- see docs/design-system.md "Two themes".
+
+   The depth rule flips. Dark gets depth from surfaces growing lighter as they
+   come forward; on light a surface has nowhere lighter to go, so the sunken
+   surface is the grey one and the raised one is white, with borders doing the
+   work shadows do elsewhere.
+
+   And the accent gets darker, not lighter. #5b9dd9 on white is about 2.6:1 --
+   fine as a large block behind dark text, nowhere near readable as a focus
+   ring or as text, which is what it is also used for. */
+
+[data-theme="light"] {
+  --surface-sunken: #eceef1;
+  --surface: #f7f8fa;
+  --surface-raised: #ffffff;
+  --border: #d4d8de;
+  --border-strong: #a8b0ba;
+
+  /* Not pure black, for the same reason the dark theme is not pure white.
+     #1b1f24 on #f7f8fa is about 14:1. */
+  --text: #1b1f24;
+  --text-dim: #5a626c;
+  --text-faint: #7d858f;
+
+  --accent: #2a6fb0;
+  --accent-hover: #1f5a92;
+  --accent-text: #ffffff;
+
+  /* Darkened to stay readable as text on a light panel. The dark theme's
+     #5cb176 is 2.2:1 on #f7f8fa; these clear 4.5:1 against both the panel
+     and the log's sunken background, which is the one that nearly got
+     missed -- the log is where these three colours are actually used. */
+  --good: #276b40;
+  --warn: #8a5d10;
+  --bad: #b23b3b;
+
+  color-scheme: light;
+}
 
 * { box-sizing: border-box; }
 

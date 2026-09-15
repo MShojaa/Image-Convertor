@@ -81,6 +81,12 @@ It is a convenience and it is treated as one -- a settings file that is missing,
 unreadable, or hand-edited into nonsense falls back to the defaults rather than
 complaining.
 
+## Dark and light
+
+The button in the corner cycles System, Dark, Light. **System is the default**
+and follows the OS, including while the window is open; picking Dark or Light
+outright sticks until you change it.
+
 ## Tests
 
 `scripts\check.bat` runs them; it passes its arguments to pytest, so
