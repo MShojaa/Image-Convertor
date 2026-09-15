@@ -42,10 +42,21 @@ Mostly for scripting; the app asks for what it needs without them.
 
     --input FOLDER       read from this folder instead of input\
     --size WxH           skip the size question (pass '' for no resizing)
+    --effect NAME[:V]    an effect to apply, repeatable; --effect none
+                         converts with no effects at all
     --mode dither        scattered dots, keeps shading; for photos
     --mode hard-cut      one threshold, flat stays flat; for line art
     --threshold 0-255    where a hard cut splits, default 128 (implies
                          --mode hard-cut)
+
+`--mode` and `--threshold` are the monochrome effect said the short way, and
+they still work. `--effect monochrome` and `--effect monochrome:128` are the
+same two things.
+
+Effects run in a fixed order whatever order you name them in, and one of each
+is applied -- naming the same effect twice keeps the last one. The order is
+fixed because most orderings are wrong: monochrome leaves an image with two
+levels, so anything working on grey has to come first.
 
 ## Tests
 

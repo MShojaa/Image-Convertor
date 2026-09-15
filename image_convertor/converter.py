@@ -1,7 +1,10 @@
-"""The conversion itself: flatten, fit, threshold, write a 1-bit BMP.
+"""The conversion itself: flatten, fit, apply the effects, write the file.
 
 Nothing here talks to the user -- cli.py does that. Everything is a plain
 function over a Pillow image so it can be tested without a folder of files.
+
+The effects themselves live in effects.py; this module owns the pipeline
+they run inside, which is the part that does not change when one is added.
 """
 
 from __future__ import annotations
@@ -11,6 +14,8 @@ from pathlib import Path
 
 from PIL import Image
 
+from .effects import Effect, apply_effects
+
 # What we will try to open. Pillow reads more than this, but these are the ones
 # worth walking an input folder for; anything else is skipped with a message
 # rather than silently.
@@ -19,10 +24,6 @@ SUPPORTED_SUFFIXES = {
 }
 
 WHITE = (255, 255, 255)
-
-# Mid grey: the hard cut has to split somewhere, and halfway is the only
-# choice that does not lean light or dark before seeing the image.
-DEFAULT_THRESHOLD = 128
 
 
 @dataclass(frozen=True)
@@ -108,21 +109,6 @@ def fit_into_box(image: Image.Image, box: Size) -> Image.Image:
     return canvas
 
 
-def to_monochrome(image: Image.Image, threshold: int | None) -> Image.Image:
-    """Down to one bit per pixel.
-
-    With no threshold Pillow dithers (Floyd-Steinberg), which scatters black
-    dots to fake the grey levels a photograph needs. A threshold is the hard
-    cut: every pixel lighter than it turns white and the rest black, keeping
-    flat areas flat -- which is what line art, icons and text want, because
-    dithering turns a flat grey fill into speckle.
-    """
-    grey = image.convert("L")
-    if threshold is None:
-        return grey.convert("1")
-    return grey.point(lambda value: 255 if value >= threshold else 0, mode="1")
-
-
 @dataclass(frozen=True)
 class Converted:
     """What happened to one image.
@@ -151,9 +137,17 @@ def convert_image(
     source: Path,
     destination: Path,
     box: Size | None = None,
-    threshold: int | None = None,
+    effects: tuple[Effect, ...] = (),
 ) -> Converted:
-    """Convert one file and write it as a 1-bit BMP."""
+    """Convert one file and write it as a 1-bit BMP.
+
+    The order is flatten, fit, then the effects -- and it is that way round for
+    a reason. Flattening first means an effect never has to think about an
+    alpha channel. Fitting before the effects rather than after means a blur
+    radius or a noise amount is in output pixels, which is the only size the
+    person choosing the number can see; applied first, most of the effect would
+    be thrown away by the shrink that followed.
+    """
     with Image.open(source) as opened:
         image = flatten_to_white(opened)
 
@@ -162,7 +156,7 @@ def convert_image(
     if box is not None:
         image = fit_into_box(image, box)
 
-    image = to_monochrome(image, threshold)
+    image = apply_effects(image, effects)
 
     destination.parent.mkdir(parents=True, exist_ok=True)
     image.save(destination, format="BMP")

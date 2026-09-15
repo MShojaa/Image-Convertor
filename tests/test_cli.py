@@ -11,7 +11,8 @@ import pytest
 from PIL import Image
 
 from image_convertor import cli
-from image_convertor.converter import DEFAULT_THRESHOLD, Size
+from image_convertor.converter import Size
+from image_convertor.effects import DEFAULT_THRESHOLD, Monochrome
 
 
 @pytest.fixture
@@ -89,18 +90,20 @@ def test_the_cut_asks_again_after_a_bad_level(answers, bad):
 # --- the flags that stand in for the questions ---------------------------
 
 def resolve(**flags):
-    return cli.resolve_threshold(
-        argparse.Namespace(**{"mode": None, "threshold": None, **flags})
+    """resolve_effects, with every flag defaulted to absent."""
+    return cli.resolve_effects(
+        argparse.Namespace(**{"mode": None, "threshold": None, "effect": None, **flags})
     )
 
 
 def test_mode_flags_answer_the_question_without_asking(monkeypatch):
     monkeypatch.setattr(cli, "ask", lambda prompt="": pytest.fail("should not ask"))
 
-    assert resolve(mode="dither") is None
-    assert resolve(mode="hard-cut") == DEFAULT_THRESHOLD
-    assert resolve(mode="hard-cut", threshold=90) == 90
-    assert resolve(threshold=90) == 90  # a threshold on its own implies a cut
+    assert resolve(mode="dither") == (Monochrome(None),)
+    assert resolve(mode="hard-cut") == (Monochrome(DEFAULT_THRESHOLD),)
+    assert resolve(mode="hard-cut", threshold=90) == (Monochrome(90),)
+    # a threshold on its own implies a cut
+    assert resolve(threshold=90) == (Monochrome(90),)
 
 
 def test_a_threshold_with_dither_is_refused(capsys):
@@ -293,3 +296,46 @@ def test_no_resizing_warns_about_nothing(tmp_path, monkeypatch, capsys):
     convert_at(tmp_path, "", monkeypatch)
 
     assert "WARNING" not in capsys.readouterr().out
+
+
+# --- the --effect flag ---------------------------------------------------
+
+def test_the_effect_flag_is_repeatable(monkeypatch):
+    monkeypatch.setattr(cli, "ask", lambda prompt="": pytest.fail("should not ask"))
+
+    assert resolve(effect=["monochrome:200"]) == (Monochrome(200),)
+
+
+def test_effect_none_means_convert_as_is(monkeypatch):
+    """An absent flag already means "ask me", so no effects has to be spelled."""
+    monkeypatch.setattr(cli, "ask", lambda prompt="": pytest.fail("should not ask"))
+
+    assert resolve(effect=["none"]) == ()
+
+
+def test_the_effect_flag_wins_over_the_older_ones():
+    assert resolve(effect=["monochrome:90"], mode="dither") == (Monochrome(90),)
+
+
+def test_a_bad_effect_is_refused_with_the_known_names(images, capsys):
+    assert cli.main(["--size", "", "--effect", "sepia"]) == 1
+
+    printed = capsys.readouterr().out
+    assert "sepia" in printed
+    assert "monochrome" in printed
+
+
+def test_effects_are_printed_before_the_run(images, monkeypatch, capsys):
+    monkeypatch.setattr(cli, "ask", lambda prompt="": pytest.fail("should not ask"))
+
+    cli.main(["--size", "", "--effect", "monochrome:200"])
+
+    assert "Effects: monochrome:200" in capsys.readouterr().out
+
+
+def test_no_effects_still_writes_the_files(images, monkeypatch):
+    """A run with nothing to apply is a copy through the resize, not an error."""
+    monkeypatch.setattr(cli, "ask", lambda prompt="": pytest.fail("should not ask"))
+
+    assert cli.main(["--size", "8x8", "--effect", "none"]) == 0
+    assert output_files(images) == ["black.bmp", "clear.bmp"]

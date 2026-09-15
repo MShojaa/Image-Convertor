@@ -150,9 +150,36 @@ The same window, in light.
   default and is one media query, but only if the app also lets it be overridden
   -- the user who picked dark deliberately does not want it reverting at sunrise.
 
-## 7. Several effects on one run
+## 7. Several effects on one run -- DONE
 
-Pick more than one effect and apply them in order, to an image or a folder.
+Landed first rather than last, for the reason the old entry gave: writing
+blur and noise as standalone flags and then retrofitting a list onto them is
+most of the work of writing them twice.
+
+`image_convertor/effects.py` holds the effects as frozen values with a `name`
+and an `order`; `apply_effects()` deduplicates by kind, keeps the last of
+each, sorts by `order` and runs them. `--effect NAME[:VALUE]` is repeatable,
+`--effect none` converts with no effects, and `--mode`/`--threshold` still
+work as the monochrome effect said the short way.
+
+What was decided rather than deferred:
+
+- **The order is fixed**, not the user's. Most orderings are wrong -- noise
+  after a hard cut adds grey to an image with two levels left -- and the app
+  knows which. An explicit order is a later flag if it is ever wanted.
+- **One of each kind**, last wins, so a front end that lets someone revise an
+  answer can append rather than edit.
+- **Effects run after the fit**, so a blur radius or a noise amount is in
+  output pixels -- the only size the person choosing the number can see.
+
+Still open from the original entry:
+
+- **A single file where a folder is accepted.** `find_images()` still takes a
+  folder only.
+- **The interactive multi-select.** The CLI still asks only the monochrome
+  question, because the CLI is being removed when the GUI lands -- building a
+  numbered menu now would be building it to delete it. The GUI is where
+  choosing several effects gets a real interface.
 
 - **This is the item that changes the shape of the rest.** Today the pipeline is
   fixed and `--mode` picks one variant of one step. The end state is a list: a

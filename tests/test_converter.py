@@ -6,7 +6,6 @@ import pytest
 from PIL import Image
 
 from image_convertor.converter import (
-    DEFAULT_THRESHOLD,
     Converted,
     Size,
     convert_image,
@@ -14,8 +13,13 @@ from image_convertor.converter import (
     fit_into_box,
     flatten_to_white,
     parse_size,
-    to_monochrome,
 )
+from image_convertor.effects import DEFAULT_THRESHOLD, Monochrome
+
+
+def to_monochrome(image, threshold):
+    """The monochrome effect, called the way this file has always called it."""
+    return Monochrome(threshold).apply(image)
 
 BLACK = (0, 0, 0)
 WHITE = (255, 255, 255)
@@ -163,7 +167,7 @@ def test_convert_image_writes_a_1bit_bmp(tmp_path):
     Image.new("RGBA", (20, 16), (0, 0, 0, 0)).save(source)
     destination = tmp_path / "out" / "logo.bmp"
 
-    written = convert_image(source, destination, Size(10, 10), DEFAULT_THRESHOLD)
+    written = convert_image(source, destination, Size(10, 10), (Monochrome(DEFAULT_THRESHOLD),))
 
     assert written.size == Size(10, 10)
     with Image.open(destination) as result:
@@ -176,7 +180,7 @@ def test_convert_image_without_a_box_keeps_the_size(tmp_path):
     source = tmp_path / "wide.png"
     Image.new("RGB", (20, 16), BLACK).save(source)
 
-    written = convert_image(source, tmp_path / "wide.bmp", None, None)
+    written = convert_image(source, tmp_path / "wide.bmp", None, (Monochrome(None),))
 
     assert written.size == Size(20, 16)
     assert not written.shrunk
@@ -209,7 +213,7 @@ def test_find_images_picks_up_images_and_skips_the_rest(tmp_path):
 def convert(source_size, box, tmp_path):
     path = tmp_path / "in.png"
     Image.new("RGB", source_size, BLACK).save(path)
-    return convert_image(path, tmp_path / "out.bmp", box)
+    return convert_image(path, tmp_path / "out.bmp", box, (Monochrome(None),))
 
 
 @pytest.mark.parametrize(
