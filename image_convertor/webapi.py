@@ -48,12 +48,32 @@ class Api:
     there is one, and the flag that a running conversion watches.
     """
 
+    #: Every attribute here is underscored, and that is not a style choice.
+    #: pywebview builds the JavaScript proxy by walking `dir()` of this object,
+    #: skipping names that start with an underscore and **recursing into every
+    #: other non-callable attribute it finds**. A plain `self._window` therefore
+    #: points it back at the pywebview Window, into `window.native`, and down
+    #: through WinForms until it hits Python's recursion limit -- thousands of
+    #: logged errors, on the GUI thread, before the page's first call returns.
+    #: The window shows, the page never finishes building, and Windows paints
+    #: the title "Image Convertor (Not Responding)".
+    #:
+    #: So: nothing public on this class except the methods the page may call.
     def __init__(self, base: Path) -> None:
-        self.base = base
-        self.window = None
+        self._base = base
+        self._window = None
         self._cancel = threading.Event()
         self._running = False
         self._choosing = False
+
+    def attach(self, window: object) -> None:
+        """Give the Api its window, once create_window has made one.
+
+        A method rather than an attribute the caller sets, so that the name it
+        is stored under stays this file's business -- and this file is where
+        the reason for that name is written down.
+        """
+        self._window = window
 
     # -- what the page needs to draw itself -------------------------------
 
@@ -65,7 +85,7 @@ class Api:
         chances to draw itself half way.
         """
         stored = settings.load()
-        beside = self.base / INPUT_NAME
+        beside = self._base / INPUT_NAME
 
         return _ok(
             effects=[
@@ -87,7 +107,7 @@ class Api:
             ],
             input_folder=str(beside) if beside.is_dir() else stored.input_folder,
             has_folder_beside=beside.is_dir(),
-            output_folder=str(self.base / OUTPUT_NAME),
+            output_folder=str(self._base / OUTPUT_NAME),
             settings={
                 "size": stored.size,
                 "output_format": stored.output_format,
@@ -111,7 +131,7 @@ class Api:
         and the result comes back through `_emit` like everything else the app
         does in the background. The page listens for `folder_chosen`.
         """
-        if self.window is None:
+        if self._window is None:
             return _fail("No window yet.")
 
         if self._choosing:
@@ -128,7 +148,7 @@ class Api:
         import webview
 
         try:
-            chosen = self.window.create_file_dialog(webview.FOLDER_DIALOG)
+            chosen = self._window.create_file_dialog(webview.FOLDER_DIALOG)
         except Exception as error:
             self._emit("folder_chosen", _fail(str(error)))
             return
@@ -164,7 +184,7 @@ class Api:
             return _fail(str(error))
         return _ok(size=str(box) if box else "")
 
-    THEMES = ("system", "dark", "light")
+    _THEMES = ("system", "dark", "light")
 
     def save_theme(self, theme: str) -> dict:
         """The one setting the page writes on its own, as soon as it changes.
@@ -173,7 +193,7 @@ class Api:
         the page resolves it against the OS every time it is applied, so a
         window left open follows the OS changing under it.
         """
-        if theme not in self.THEMES:
+        if theme not in self._THEMES:
             return _fail(f"Unknown theme: {theme}")
         settings.remember(theme=theme)
         return _ok(theme=theme)
@@ -197,7 +217,7 @@ class Api:
         if self._running:
             return _fail("A conversion is already running.")
 
-        source = Path(folder).expanduser() if folder else self.base / INPUT_NAME
+        source = Path(folder).expanduser() if folder else self._base / INPUT_NAME
         if not source.is_dir():
             return _fail(f"Not a folder: {source}")
 
@@ -233,7 +253,7 @@ class Api:
         """The batch, on the worker thread. Reports every file back to the page."""
         converted = failed = 0
         not_shrunk: list[str] = []
-        output_folder = self.base / OUTPUT_NAME
+        output_folder = self._base / OUTPUT_NAME
 
         try:
             for index, image_path in enumerate(images, start=1):
@@ -271,7 +291,7 @@ class Api:
                 self._emit("file_converted", payload)
 
             if remember and converted:
-                beside = self.base / INPUT_NAME
+                beside = self._base / INPUT_NAME
                 settings.remember(
                     input_folder="" if source == beside else str(source),
                     size=str(box) if box else "",
@@ -297,10 +317,10 @@ class Api:
         tests drive this class -- and because a page that has navigated or
         closed under us is not a reason to lose the rest of the batch.
         """
-        if self.window is None:
+        if self._window is None:
             return
         try:
-            self.window.evaluate_js(f"window.onAppEvent({event!r}, {_json(payload)})")
+            self._window.evaluate_js(f"window.onAppEvent({event!r}, {_json(payload)})")
         except Exception:
             pass
 

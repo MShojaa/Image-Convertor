@@ -71,8 +71,10 @@ def main(argv: list[str] | None = None) -> int:
         min_size=MIN_SIZE,
     )
     # The Api needs the window to open a folder dialog and to call into the
-    # page, and create_window is the only place it exists.
-    api.window = window
+    # page, and create_window is the only place it exists. It goes on a private
+    # attribute deliberately -- see the note in Api.__init__, which is the
+    # difference between a working window and one that says Not Responding.
+    api.attach(window)
 
     webview.start(debug=args.debug)
     return 0
