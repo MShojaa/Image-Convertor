@@ -14,6 +14,36 @@ stylesheet.
 Dark is the design, not the variant. Light comes later and is not an inversion
 of this -- see [Two themes](#two-themes).
 
+## The mark
+
+`assets/make_icon.py` draws it, and the results are committed so a build does
+not have to run it. The design is the thing the app does: sun and hills -- the
+glyph everything uses for "image" -- with the right half of the same picture run
+through the app's own `Monochrome` effect. The right side of the icon is real
+output, not an impression of one, and the sun sits on the seam so each half
+shows half of the same subject rather than two pictures.
+
+Three things it got wrong first, all of which only show at small sizes:
+
+- **The dither has to be coarse.** Dithering a smooth picture at full resolution
+  looks like the picture -- correct, and invisible. The right half is dithered
+  at a twelfth of the size and scaled back with NEAREST.
+- **The tile and the picture are supersampled; the dither is not.** Pillow does
+  not antialias a rounded rectangle or a polygon. Scaling a dither down averages
+  it back into the grey it came from, so it is computed at the final size.
+- **There is a seam down the middle.** Without it the halves blend and the icon
+  is just a picture.
+
+The `.ico` carries 16 through 256 so Windows never scales one, and the header
+shows the same mark at 28px from a 96px PNG. `tests/test_icon.py` checks each
+size is really in the file, that none came out blank, and that the right half
+still has fewer levels than the left -- which is how a dither that stopped being
+applied would be noticed.
+
+**On Windows the window icon is the exe's icon.** pywebview's own `icon=` is
+GTK/QT only, so `build.py` passes `--icon` to PyInstaller and that is the whole
+story -- which is also why running from source shows Python's icon instead.
+
 ## Colour
 
 Three greys for surfaces, three for text, one accent, three states. That is the

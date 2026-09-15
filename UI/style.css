@@ -135,8 +135,21 @@ body {
 
 .app-header h1 {
   margin: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
   font-size: var(--text-lg);
   font-weight: var(--weight-bold);
+}
+
+/* Drawn at 96px and shown at 28, so it stays sharp on a 200% display. The
+   mark carries its own white panel and blue tile, so it needs no background
+   of its own and looks the same in both themes. */
+.logo {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  flex: none;
 }
 
 .header-actions {
