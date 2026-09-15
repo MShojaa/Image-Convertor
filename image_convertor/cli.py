@@ -12,12 +12,13 @@ import sys
 from pathlib import Path
 
 from . import __version__
-from .converter import (
+from .converter import Size, convert_image, find_images, parse_size
+from .effects import (
     DEFAULT_THRESHOLD,
-    Size,
-    convert_image,
-    find_images,
-    parse_size,
+    Effect,
+    Monochrome,
+    describe,
+    parse_effect,
 )
 
 INPUT_NAME = "input"
@@ -149,13 +150,14 @@ def run(args: argparse.Namespace) -> int:
     # --size on the command line skips the question, so the app can be driven
     # from a script; otherwise ask, and enter means no resizing.
     box = parse_size(args.size) if args.size is not None else ask_size()
-    threshold = resolve_threshold(args)
+    effects = resolve_effects(args)
 
     output_folder = base / OUTPUT_NAME
     output_folder.mkdir(parents=True, exist_ok=True)
 
     print()
     print(f"Writing to {output_folder}")
+    print(f"Effects: {describe(effects)}")
     print()
 
     failures = 0
@@ -163,7 +165,7 @@ def run(args: argparse.Namespace) -> int:
     for image_path in images:
         destination = output_folder / (image_path.stem + ".bmp")
         try:
-            result = convert_image(image_path, destination, box, threshold)
+            result = convert_image(image_path, destination, box, effects)
         except Exception as error:  # a bad file should not stop the batch
             failures += 1
             print(f"  FAILED  {image_path.name}: {error}")
@@ -232,6 +234,16 @@ def build_parser() -> argparse.ArgumentParser:
         help="Resize box, e.g. 128x64. Omit to be asked; pass '' for no resizing.",
     )
     parser.add_argument(
+        "--effect",
+        action="append",
+        metavar="NAME[:VALUE]",
+        help=(
+            "An effect to apply, repeatable. They run in a fixed order "
+            "whatever order they are given in, and one of each is applied. "
+            "Pass --effect none for no effects at all."
+        ),
+    )
+    parser.add_argument(
         "--mode",
         choices=("dither", "hard-cut"),
         help="Skip the mode question. Dither for photos, hard cut for line art.",
@@ -249,19 +261,43 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def resolve_threshold(args: argparse.Namespace) -> int | None:
-    """The threshold to convert with, or None to dither.
+def resolve_effects(args: argparse.Namespace) -> tuple[Effect, ...]:
+    """The effects to convert with.
 
-    Either flag on the command line answers the question, so the app can be
-    driven from a script; with neither, ask.
+    Any flag on the command line answers the question, so the app can be
+    driven from a script; with none of them, ask.
+
+    `--mode` and `--threshold` predate effects and still work: they are the
+    monochrome effect said the long way round, and they stay because scripts
+    were written against them.
     """
+    if args.effect:
+        return parse_effects(args.effect)
     if args.mode == "dither":
-        return None
+        return (Monochrome(None),)
     if args.mode == "hard-cut":
-        return DEFAULT_THRESHOLD if args.threshold is None else args.threshold
+        return (Monochrome(DEFAULT_THRESHOLD if args.threshold is None else args.threshold),)
     if args.threshold is not None:
-        return args.threshold
-    return ask_threshold_mode()
+        return (Monochrome(args.threshold),)
+    return ask_effects()
+
+
+def parse_effects(given: list[str]) -> tuple[Effect, ...]:
+    """Read the --effect flags. "none" on its own means convert as-is.
+
+    It has to be spelled, because an absent flag already means something else
+    -- ask me -- and a script that wants no effects has no way to say so by
+    leaving something out.
+    """
+    if [text.strip().lower() for text in given] == ["none"]:
+        return ()
+    return tuple(parse_effect(text) for text in given)
+
+
+def ask_effects() -> tuple[Effect, ...]:
+    """The interactive way in. Today that is only the monochrome question."""
+    threshold = ask_threshold_mode()
+    return (Monochrome(threshold),)
 
 
 def main(argv: list[str] | None = None) -> int:
