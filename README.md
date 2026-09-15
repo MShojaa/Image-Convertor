@@ -107,6 +107,20 @@ failure. They cover the rules that are easy to break by accident: transparency
 landing on white, the aspect-ratio fit and its centring, shrink-only resizing,
 the two black-and-white modes, and what the app asks for and accepts.
 
+## What it remembers
+
+After a run it remembers the folder, the size, the format and the effects, in
+`%LOCALAPPDATA%\Image-Convertor\settings.json`. The one that does anything
+today is the folder: with no `input\` beside the app it offers the folder you
+used last time instead of asking again, and only if that folder is still there
+and still has images in it.
+
+It is a convenience and it is treated as one -- a settings file that is
+missing, unreadable, or hand-edited into nonsense falls back to the defaults
+rather than complaining. `--no-remember` turns the whole thing off for a run,
+which is what a scripted run wants so it does not change what the next
+interactive one does.
+
 ## Working on it
 
 `docs/` holds the rest, and `docs/workflow.md` is the one to read first -- it is

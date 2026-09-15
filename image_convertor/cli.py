@@ -12,13 +12,14 @@ import sys
 from pathlib import Path
 
 from . import __version__
-from . import formats
+from . import formats, settings
 from .converter import Size, convert_image, find_images, parse_size
 from .effects import (
     DEFAULT_THRESHOLD,
     Effect,
     Monochrome,
     describe,
+    order_effects,
     parse_effect,
 )
 
@@ -130,6 +131,7 @@ def ask_threshold_mode() -> int | None:
 
 def run(args: argparse.Namespace) -> int:
     base = base_folder()
+    stored = settings.load() if args.remember else settings.Settings()
 
     if args.input is not None:
         source_folder = Path(args.input).expanduser()
@@ -139,7 +141,7 @@ def run(args: argparse.Namespace) -> int:
     else:
         source_folder = base / INPUT_NAME
         if not source_folder.is_dir():
-            source_folder = ask_input_folder(source_folder)
+            source_folder = remembered_folder(stored) or ask_input_folder(source_folder)
 
     images = find_images(source_folder)
     if not images:
@@ -195,7 +197,37 @@ def run(args: argparse.Namespace) -> int:
     converted = len(images) - failures
     print(f"Done: {converted} converted, {failures} failed.")
     report_not_shrunk(not_shrunk, converted, box)
+
+    if args.remember and converted:
+        # Only what was actually used, and only after something was converted
+        # -- a run that found nothing should not overwrite a good memory with
+        # the folder that turned out to be empty.
+        settings.remember(
+            input_folder=str(source_folder) if source_folder != base / INPUT_NAME else "",
+            size=str(box) if box else "",
+            output_format=chosen_format.name if chosen_format else "",
+            effects=tuple(effect.described() for effect in order_effects(effects)),
+        )
+
     return 1 if failures else 0
+
+
+def remembered_folder(stored: settings.Settings) -> Path | None:
+    """The folder used last time, if it is still there and still has images.
+
+    Checked rather than trusted: a remembered path is the one setting most
+    likely to have stopped being true since it was written -- a removable
+    drive, a folder that was emptied, a machine that was reimaged.
+    """
+    if not stored.input_folder:
+        return None
+
+    folder = Path(stored.input_folder)
+    if not folder.is_dir() or not find_images(folder):
+        return None
+
+    print(f"Using the folder from last time: {folder}")
+    return folder
 
 
 def report_not_shrunk(names: list[str], converted: int, box: Size | None) -> None:
@@ -239,6 +271,15 @@ def build_parser() -> argparse.ArgumentParser:
         "--size",
         metavar="WxH",
         help="Resize box, e.g. 128x64. Omit to be asked; pass '' for no resizing.",
+    )
+    parser.add_argument(
+        "--no-remember",
+        dest="remember",
+        action="store_false",
+        help=(
+            "Do not read or write the settings file. Use it when a scripted "
+            "run should not change what the next interactive one does."
+        ),
     )
     parser.add_argument(
         "--format",
