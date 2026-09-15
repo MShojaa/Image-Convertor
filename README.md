@@ -60,15 +60,27 @@ levels, so anything working on grey has to come first.
 
 ### The effects
 
-    blur[:RADIUS]        gaussian blur, default 1 pixel; fractional radii
-                         are the useful ones on a small image
-    monochrome[:0-255]   black and white; with a threshold it is a hard
-                         cut, without one it dithers
+    blur[:RADIUS]            gaussian blur, default 1 pixel; fractional
+                             radii are the useful ones on a small image
+    noise[:AMOUNT[:SEED]]    uniform noise, default 25 grey levels either
+                             way; the seed defaults to 0, not the clock
+    monochrome[:0-255]       black and white; with a threshold it is a hard
+                             cut, without one it dithers
+
+A setting can be left out to take its default, so `--effect noise::7` is the
+default amount with seed 7.
+
+The noise **seed is fixed, not the clock**, so converting the same folder twice
+gives the same files. Pass a different seed when you want different noise --
+that is what the number is for.
 
 **Blur into a hard cut** is the pairing worth knowing about: it is how a
-threshold gets a soft edge rather than a jagged one. Blur into a dither
-mostly cancels out -- dithering is already scattering dots to fake the grey
-levels the blur just made.
+threshold gets a soft edge rather than a jagged one. **Noise into a hard
+cut** is a hand-rolled dither, and a coarse one -- reach for it when you
+want the coarseness, not as a better `monochrome`.
+
+Blur into a dither mostly cancels out, because dithering is already
+scattering dots to fake the grey levels the blur just made.
 
 ## Tests
 
