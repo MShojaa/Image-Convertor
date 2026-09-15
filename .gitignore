@@ -5,3 +5,12 @@ dist/
 *.spec
 output/
 input/
+
+# The knowledge graph is derived, not shared -- rebuild it, do not carry it.
+# Two things make tracking it actively harmful: a post-commit hook writes its
+# output after the commit it follows, so the tree goes dirty the instant any
+# commit finishes and those files then block the next checkout or merge; and
+# manifest.json records an mtime per file, which a checkout rewrites without
+# changing a byte. A cold rebuild takes seconds and costs no API call.
+# docs/graphify.md has the rest.
+graphify-out/
