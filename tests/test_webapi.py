@@ -16,6 +16,8 @@ from __future__ import annotations
 
 import json
 import re
+import threading
+import time
 
 import pytest
 from PIL import Image
@@ -30,6 +32,9 @@ class FakeWindow:
     def __init__(self):
         self.events = []
         self.dialog_returns = None
+        self.dialog_error = None
+        self.dialog_delay = 0.0
+        self.dialog_thread = None   # which thread opened it -- see the tests
 
     def evaluate_js(self, script):
         # The real one runs this string. Unpicking it here keeps the tests
@@ -41,6 +46,13 @@ class FakeWindow:
         self.events.append((match.group(1), json.loads(match.group(2))))
 
     def create_file_dialog(self, *args, **kwargs):
+        # The real one hands its work to the GUI thread and waits. Recording
+        # the caller is how the test below can tell that this was not called
+        # from the js_api thread, which is the whole bug.
+        self.dialog_thread = threading.current_thread()
+        time.sleep(self.dialog_delay)
+        if self.dialog_error:
+            raise self.dialog_error
         return self.dialog_returns
 
 
@@ -175,20 +187,103 @@ def test_inspect_folder_is_happy_with_an_empty_one(app, tmp_path):
     assert answer["ok"] and answer["count"] == 0
 
 
+def wait_for(predicate, timeout=5.0):
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if predicate():
+            return True
+        time.sleep(0.01)
+    return False
+
+
+def folder_events(app):
+    return [payload for event, payload in app.window.events if event == "folder_chosen"]
+
+
+def test_the_folder_dialog_does_not_open_on_the_calling_thread(app, images):
+    """The bug this guards against locked the window with no error at all.
+
+    A js_api method runs while the page awaits its result, and
+    create_file_dialog puts its work on the GUI thread and waits. Opening the
+    dialog from inside the js_api call is therefore two waits pointing at each
+    other: the window freezes, no dialog appears, and Windows paints it Not
+    Responding. Nothing is logged, because nothing failed.
+    """
+    app.window.dialog_returns = [str(images)]
+    caller = threading.current_thread()
+
+    app.choose_folder()
+    assert wait_for(lambda: app.window.dialog_thread is not None)
+
+    assert app.window.dialog_thread is not caller
+
+
+def test_choosing_a_folder_returns_immediately(app, images):
+    """It cannot wait for the dialog -- that is what deadlocked."""
+    app.window.dialog_returns = [str(images)]
+    app.window.dialog_delay = 0.5
+
+    started = time.time()
+    answer = app.choose_folder()
+    elapsed = time.time() - started
+
+    assert answer["ok"] and answer["opening"] is True
+    assert elapsed < 0.4, "choose_folder waited for the dialog"
+    assert wait_for(lambda: folder_events(app))
+
+
+def test_the_chosen_folder_arrives_as_an_event(app, images):
+    app.window.dialog_returns = [str(images)]
+
+    app.choose_folder()
+
+    assert wait_for(lambda: folder_events(app))
+    chosen = folder_events(app)[0]
+    assert chosen["ok"] and chosen["folder"] == str(images)
+    assert chosen["count"] == 2
+
+
 def test_a_cancelled_folder_dialog_is_not_a_failure(app):
     app.window.dialog_returns = None
 
-    answer = app.choose_folder()
+    app.choose_folder()
 
-    assert answer["ok"] and answer["folder"] is None
+    assert wait_for(lambda: folder_events(app))
+    chosen = folder_events(app)[0]
+    assert chosen["ok"] and chosen["folder"] is None
 
 
-def test_choosing_a_folder_returns_what_is_in_it(app, images):
+def test_a_dialog_that_raises_is_reported_rather_than_lost(app):
+    app.window.dialog_error = RuntimeError("no shell available")
+
+    app.choose_folder()
+
+    assert wait_for(lambda: folder_events(app))
+    assert folder_events(app)[0]["ok"] is False
+
+
+def test_a_second_dialog_is_refused_while_one_is_open(app, images):
+    """The dialog is modal but the page is not; a second click would open a
+    second dialog behind the first."""
+    app.window.dialog_returns = [str(images)]
+    app.window.dialog_delay = 0.4
+
+    first = app.choose_folder()
+    second = app.choose_folder()
+
+    assert first["ok"] is True
+    assert second["ok"] is False
+    assert "already open" in second["error"]
+    assert wait_for(lambda: folder_events(app))
+
+
+def test_the_dialog_can_be_opened_again_after_it_closes(app, images):
     app.window.dialog_returns = [str(images)]
 
-    answer = app.choose_folder()
+    app.choose_folder()
+    assert wait_for(lambda: folder_events(app))
 
-    assert answer["ok"] and answer["count"] == 2
+    assert app.choose_folder()["ok"] is True
 
 
 # --- checking a size as it is typed --------------------------------------

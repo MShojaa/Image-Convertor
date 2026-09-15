@@ -53,6 +53,7 @@ class Api:
         self.window = None
         self._cancel = threading.Event()
         self._running = False
+        self._choosing = False
 
     # -- what the page needs to draw itself -------------------------------
 
@@ -96,16 +97,51 @@ class Api:
         )
 
     def choose_folder(self) -> dict:
-        """The native folder picker. Returns the folder, or ok with none."""
+        """Open the native folder picker. The answer arrives as an event.
+
+        **It must not open the dialog here**, and this is the one thing in this
+        file that is not a matter of taste. A `js_api` method runs while the
+        page is awaiting its result, and `create_file_dialog` puts its work on
+        the GUI thread and waits -- so opening it from inside a `js_api` call
+        is two waits pointing at each other. The window locks up, no dialog
+        ever appears, and Windows paints it as Not Responding. There is no
+        error and nothing to see in a log.
+
+        So the dialog goes on a thread of its own, this returns immediately,
+        and the result comes back through `_emit` like everything else the app
+        does in the background. The page listens for `folder_chosen`.
+        """
         if self.window is None:
             return _fail("No window yet.")
 
+        if self._choosing:
+            # The dialog is modal but the page is not: a second click while
+            # the first is open would open a second one behind it.
+            return _fail("A folder dialog is already open.")
+
+        self._choosing = True
+        threading.Thread(target=self._choose_folder, daemon=True).start()
+        return _ok(opening=True)
+
+    def _choose_folder(self) -> None:
+        """The dialog, on its own thread, reporting back when it closes."""
         import webview
 
-        chosen = self.window.create_file_dialog(webview.FOLDER_DIALOG)
+        try:
+            chosen = self.window.create_file_dialog(webview.FOLDER_DIALOG)
+        except Exception as error:
+            self._emit("folder_chosen", _fail(str(error)))
+            return
+        finally:
+            self._choosing = False
+
         if not chosen:
-            return _ok(folder=None)   # cancelled, which is not a failure
-        return self.inspect_folder(chosen[0])
+            # Cancelled, which is not a failure -- the page leaves the folder
+            # it already had rather than clearing it.
+            self._emit("folder_chosen", _ok(folder=None))
+            return
+
+        self._emit("folder_chosen", self.inspect_folder(chosen[0]))
 
     def inspect_folder(self, folder: str) -> dict:
         """What is in a folder, for the page to show before anything runs."""

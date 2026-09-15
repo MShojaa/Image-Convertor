@@ -162,7 +162,21 @@ What the old entry called out, and how it went:
 so `app.js` is checked by running the app and everything it may ask for is
 tested through `webapi.py`. That is a real gap, not an oversight.
 
-One thing worth knowing for anyone driving the window from Python: pywebview's
+**The one that got through to the user:** `choose_folder` opened the native
+dialog from inside the `js_api` call. A `js_api` method runs while the page
+awaits its result and `create_file_dialog` waits on the GUI thread, so the two
+waits point at each other -- the window locks up, no dialog ever appears, and
+Windows paints it Not Responding. Nothing is logged, because nothing fails. It
+now runs on its own thread and the answer comes back as a `folder_chosen`
+event, like everything else the app does in the background. Fixed in 3.1.1.
+
+It reached a user because the tests used a fake window that answered instantly
+and the real Browse button was never clicked in a real window -- the one path
+the GUI work never exercised end to end. `test_webapi.py` now asserts the rule
+rather than the symptom: the dialog must not open on the thread that asked for
+it.
+
+Also worth knowing for anyone driving the window from Python: pywebview's
 `evaluate_js` is unreliable for some DOM reads -- `querySelectorAll(...).length`
 came back 0 and `element.dataset.name` came back empty for elements that
 demonstrably existed, while `getAttribute()` and `outerHTML` on the same
