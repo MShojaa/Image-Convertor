@@ -1,19 +1,28 @@
 # TODO
 
-Things specified and not yet built, with what finishing each one involves. Not a
-wish list -- everything here is a decision already taken that is waiting on
-being written.
+What each feature decided, and what it cost. Not a wish list -- nothing goes
+in here that has not been decided.
 
-Nothing below is started. The order is roughly the order to do them in: 1-4 are
-independent of each other, 7 changes the shape of 1 and 2 so it wants doing
-before there are many effects to retrofit, and 5-6 are the largest piece and
-depend on none of it.
+**All seven are done.** They are kept rather than deleted because what each one
+decided, and what it cost, is the part worth having later -- a finished entry
+says why it is the way it is, which is the question that comes back. What is
+actually outstanding is the short list at the very bottom.
 
-The vocabulary shifts here. Today's conversion is one fixed pipeline --
-flatten, fit, threshold -- and `--mode dither|hard-cut` chooses the last step.
-Items 1, 2 and 7 turn that into a list of **effects** the user picks and orders,
-and item 3 stops assuming the output is a monochrome BMP. Both are worth doing
-deliberately rather than bolting a flag on each time.
+They were done out of order, and the order was the point. Item 7 went first: it
+changes the shape items 1 and 2 would have been written in, and retrofitting a
+list onto three flags that had each grown their own question is most of the work
+of writing them twice. Then 1, 2, 3 and 4, then 5, then 6 -- which was cheap
+only because 5 wrote the design system before styling anything.
+
+| # | what | version |
+|---|---|---|
+| 7 | the effect pipeline | 1.2.0 |
+| 1 | blur | 1.3.0 |
+| 2 | noise | 1.4.0 |
+| 3 | output format | **2.0.0** -- output stopped always being `.bmp` |
+| 4 | input folder, and the settings file | 2.1.0 |
+| 5 | the window, and the CLI removed | **3.0.0** -- the CLI went |
+| 6 | light theme | 3.1.0 |
 
 ---
 
@@ -208,35 +217,15 @@ What was decided rather than deferred:
 - **Effects run after the fit**, so a blur radius or a noise amount is in
   output pixels -- the only size the person choosing the number can see.
 
-Still open from the original entry:
+Still open, and now the only thing left in this file:
 
-- **A single file where a folder is accepted.** `find_images()` still takes a
-  folder only.
-- **The interactive multi-select.** The CLI still asks only the monochrome
-  question, because the CLI is being removed when the GUI lands -- building a
-  numbered menu now would be building it to delete it. The GUI is where
-  choosing several effects gets a real interface.
+- **A single file where a folder is accepted.** `find_images()` takes a folder
+  only, so "on an image/folder" from the original request is half done. It is a
+  small change there plus a Browse button that can pick either, and it did not
+  belong in any of the seven.
 
-- **This is the item that changes the shape of the rest.** Today the pipeline is
-  fixed and `--mode` picks one variant of one step. The end state is a list: a
-  user chooses blur *and* noise *and* a hard cut, and they run in a defined
-  order.
-- **Do it before there are many effects, not after.** Retrofitting a list onto
-  three or four flags that each grew their own question is most of the work of
-  writing them again. If items 1 and 2 are being written anyway, write them into
-  this shape from the start.
-- **The order question.** Either the user's order, or a fixed sensible one. Fixed
-  is the better default -- most orders are wrong (noise after a hard cut adds
-  grey to a 1-bit image; blur after it does the same) and the app knows which
-  are. Allowing an explicit order is a later flag, not the first version.
-- **Two shapes to choose between.** A repeatable flag (`--effect blur:2
-  --effect noise:30`), or one comma-separated list. The repeatable flag reads
-  better and argparse gives it for free with `action="append"`; the interactive
-  side wants a numbered menu that can be answered `1,3` either way.
-- **The interactive question has to stay answerable.** The current questions all
-  take one answer and have a default on enter. A multi-select must keep both --
-  enter means "no effects, convert as-is".
-- **Folder or image.** "on an image/folder" in the request: today the input is
-  always a folder. Accepting a single file path wherever a folder is accepted is
-  a small change in `find_images()` and worth doing here rather than as its own
-  item.
+The interactive multi-select the old entry wanted is done, and not as a numbered
+menu: the window lists the effects in the order they run, each with a checkbox
+and its own settings inline, and the settings stay visible when the box is clear
+rather than appearing on tick -- a row that changes height when checked moves
+everything below it.
