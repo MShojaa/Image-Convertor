@@ -76,7 +76,13 @@ what a batch does with a file that fails, and what it warns about.
 **`UI/` is not covered**, and that is a real gap rather than an oversight:
 there is no JavaScript runner in this project. Everything `app.js` is allowed
 to ask for is tested through `webapi.py`, and the page itself is checked by
-running the app. A new feature or fix adds its
+running the app.
+
+**Run the built exe before calling a window change done.** Two bugs have
+shipped that every test passed through: one only happens frozen, and the other
+only happens against a real pywebview window rather than the fake one the
+tests use. Both showed as a window that opened and then said Not Responding.
+`scriptsuild-and-run.bat`, click the thing that changed. A new feature or fix adds its
 checks to whichever of those it belongs in, or to a new `tests/test_*.py`, which
 is picked up by being put there -- pytest globs the folder and `pytest.ini`
 points at it.

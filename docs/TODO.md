@@ -162,7 +162,26 @@ What the old entry called out, and how it went:
 so `app.js` is checked by running the app and everything it may ask for is
 tested through `webapi.py`. That is a real gap, not an oversight.
 
-**The one that got through to the user:** `choose_folder` opened the native
+**Two bugs got through to the user, and both showed as Not Responding.**
+
+The first was at startup, and it is the one worth remembering. pywebview
+builds its JavaScript proxy by walking `dir()` of the `js_api` object,
+skipping underscored names and **recursing into every other non-callable
+attribute**. `Api` held `self.window`, so the walk went into the pywebview
+Window, into `window.native`, and down through WinForms until Python's
+recursion limit -- on the GUI thread, before the page's first call returned.
+The window painted, the page stayed half-built (no formats, no effects, no
+folder) and the titlebar said Not Responding. Every attribute on `Api` is now
+underscored and the window arrives through `attach()`; the reason is written
+in the class, because the next attribute someone adds is how it comes back.
+
+It was invisible from source, where the same recursion is logged and survived,
+and only fatal frozen -- so the tests, which drive `Api` directly, could never
+have caught it. What catches it now is a test that runs pywebview's own
+traversal rule over a real `Api`, plus one asserting nothing public on the
+class is anything but a method.
+
+The second: `choose_folder` opened the native
 dialog from inside the `js_api` call. A `js_api` method runs while the page
 awaits its result and `create_file_dialog` waits on the GUI thread, so the two
 waits point at each other -- the window locks up, no dialog ever appears, and

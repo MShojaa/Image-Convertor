@@ -60,7 +60,7 @@ class FakeWindow:
 def app(tmp_path):
     """An Api rooted at a tmp folder, with a fake window attached."""
     api = Api(tmp_path)
-    api.window = FakeWindow()
+    api.attach(FakeWindow())
     return api
 
 
@@ -94,11 +94,11 @@ def _settle(app, timeout=10.0):
 
 
 def events(app, name):
-    return [payload for event, payload in app.window.events if event == name]
+    return [payload for event, payload in app._window.events if event == name]
 
 
 def outputs(app):
-    folder = app.base / "output"
+    folder = app._base / "output"
     return sorted(path.name for path in folder.iterdir()) if folder.is_dir() else []
 
 
@@ -197,7 +197,7 @@ def wait_for(predicate, timeout=5.0):
 
 
 def folder_events(app):
-    return [payload for event, payload in app.window.events if event == "folder_chosen"]
+    return [payload for event, payload in app._window.events if event == "folder_chosen"]
 
 
 def test_the_folder_dialog_does_not_open_on_the_calling_thread(app, images):
@@ -209,19 +209,19 @@ def test_the_folder_dialog_does_not_open_on_the_calling_thread(app, images):
     other: the window freezes, no dialog appears, and Windows paints it Not
     Responding. Nothing is logged, because nothing failed.
     """
-    app.window.dialog_returns = [str(images)]
+    app._window.dialog_returns = [str(images)]
     caller = threading.current_thread()
 
     app.choose_folder()
-    assert wait_for(lambda: app.window.dialog_thread is not None)
+    assert wait_for(lambda: app._window.dialog_thread is not None)
 
-    assert app.window.dialog_thread is not caller
+    assert app._window.dialog_thread is not caller
 
 
 def test_choosing_a_folder_returns_immediately(app, images):
     """It cannot wait for the dialog -- that is what deadlocked."""
-    app.window.dialog_returns = [str(images)]
-    app.window.dialog_delay = 0.5
+    app._window.dialog_returns = [str(images)]
+    app._window.dialog_delay = 0.5
 
     started = time.time()
     answer = app.choose_folder()
@@ -233,7 +233,7 @@ def test_choosing_a_folder_returns_immediately(app, images):
 
 
 def test_the_chosen_folder_arrives_as_an_event(app, images):
-    app.window.dialog_returns = [str(images)]
+    app._window.dialog_returns = [str(images)]
 
     app.choose_folder()
 
@@ -244,7 +244,7 @@ def test_the_chosen_folder_arrives_as_an_event(app, images):
 
 
 def test_a_cancelled_folder_dialog_is_not_a_failure(app):
-    app.window.dialog_returns = None
+    app._window.dialog_returns = None
 
     app.choose_folder()
 
@@ -254,7 +254,7 @@ def test_a_cancelled_folder_dialog_is_not_a_failure(app):
 
 
 def test_a_dialog_that_raises_is_reported_rather_than_lost(app):
-    app.window.dialog_error = RuntimeError("no shell available")
+    app._window.dialog_error = RuntimeError("no shell available")
 
     app.choose_folder()
 
@@ -265,8 +265,8 @@ def test_a_dialog_that_raises_is_reported_rather_than_lost(app):
 def test_a_second_dialog_is_refused_while_one_is_open(app, images):
     """The dialog is modal but the page is not; a second click would open a
     second dialog behind the first."""
-    app.window.dialog_returns = [str(images)]
-    app.window.dialog_delay = 0.4
+    app._window.dialog_returns = [str(images)]
+    app._window.dialog_delay = 0.4
 
     first = app.choose_folder()
     second = app.choose_folder()
@@ -278,7 +278,7 @@ def test_a_second_dialog_is_refused_while_one_is_open(app, images):
 
 
 def test_the_dialog_can_be_opened_again_after_it_closes(app, images):
-    app.window.dialog_returns = [str(images)]
+    app._window.dialog_returns = [str(images)]
 
     app.choose_folder()
     assert wait_for(lambda: folder_events(app))
@@ -378,14 +378,14 @@ def test_the_run_finishes_with_a_summary(app, images):
 def test_the_effects_are_applied(app, images):
     run(app, effects=["monochrome:128"])
 
-    with Image.open(app.base / "output" / "black.png") as result:
+    with Image.open(app._base / "output" / "black.png") as result:
         assert result.mode == "1"
 
 
 def test_the_size_is_applied(app, images):
     run(app, size="10x10")
 
-    with Image.open(app.base / "output" / "clear.png") as result:
+    with Image.open(app._base / "output" / "clear.png") as result:
         assert result.size == (10, 10)
 
 
@@ -427,7 +427,7 @@ def test_every_event_is_json_safe(app, images):
     """The FakeWindow parses what it is given, so this is asserted by running."""
     run(app, size="10x10", effects=["blur:1"])
 
-    assert app.window.events
+    assert app._window.events
 
 
 # --- the shrink warning --------------------------------------------------
@@ -536,3 +536,85 @@ def test_an_unknown_theme_is_refused(app):
 
     assert answer["ok"] is False
     assert settings.load().theme == settings.Settings().theme
+
+
+# --- what pywebview sees when it builds the JavaScript proxy --------------
+
+def test_pywebview_can_enumerate_the_api_without_recursing(app, images):
+    """The bug that shipped: the window opened and never finished loading.
+
+    pywebview builds its JS proxy by walking dir() of this object, skipping
+    underscored names and recursing into every other non-callable attribute.
+    A public `self.window` sends it into the pywebview Window, through
+    `window.native`, and down WinForms until Python's recursion limit -- and
+    it does that on the GUI thread, before the page's first call returns. The
+    window paints, the page stays half-built, and the titlebar says Not
+    Responding.
+
+    This runs the real traversal, so it fails the way the app failed.
+    """
+    from webview.util import inspect as _inspect  # noqa: F401  (import check)
+    import webview.util as util
+
+    functions = {}
+    getter = util.__dict__.get("get_functions")
+    if getter is None:
+        # get_functions is nested inside another function in some versions;
+        # reimplement its rule rather than skip the check.
+        functions = _walk_like_pywebview(app)
+    else:  # pragma: no cover - depends on the pywebview version
+        functions = getter(app)
+
+    assert set(functions) >= {
+        "describe_app", "choose_folder", "inspect_folder",
+        "check_size", "save_theme", "start_conversion", "cancel_conversion",
+    }
+
+
+def _walk_like_pywebview(obj, base_name="", functions=None, depth=0):
+    """pywebview's traversal rule, as webview/util.py implements it.
+
+    Deliberately not depth-limited: a limit here would hide exactly the
+    runaway this test exists to catch. It recurses until Python stops it,
+    which against the old code it did.
+    """
+    import inspect
+
+    if functions is None:
+        functions = {}
+
+    for name in dir(obj):
+        if name.startswith("_"):
+            continue
+        attr = getattr(obj, name)
+        full = f"{base_name}.{name}" if base_name else name
+
+        if inspect.ismethod(attr) or inspect.isfunction(attr):
+            functions[full] = True
+        elif inspect.isclass(attr) or (
+            isinstance(attr, object) and not callable(attr) and hasattr(attr, "__module__")
+        ):
+            _walk_like_pywebview(attr, full, functions, depth + 1)
+
+    return functions
+
+
+def test_nothing_public_on_the_api_is_anything_but_a_method(app, images):
+    """The rule that keeps the traversal above finite, stated directly."""
+    import inspect
+
+    for name in dir(app):
+        if name.startswith("_"):
+            continue
+        attribute = getattr(app, name)
+        assert inspect.ismethod(attribute), f"{name} is public and not a method"
+
+
+def test_the_window_is_not_reachable_from_a_public_attribute(app):
+    """The specific cycle that caused it: Api -> Window -> native -> forever."""
+    app.attach(FakeWindow())
+
+    reachable = [name for name in dir(app) if not name.startswith("_")]
+
+    assert "window" not in reachable
+    assert "base" not in reachable
