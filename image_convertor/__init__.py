@@ -1,3 +1,3 @@
 """Convert images to 1-bit monochrome bitmaps."""
 
-__version__ = "3.3.0"
+__version__ = "3.3.1"
