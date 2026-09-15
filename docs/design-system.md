@@ -203,17 +203,46 @@ control and neither ships without the other.
 
 ## Two themes
 
-The light theme is item 6 in `TODO.md` and this file is what makes it cheap.
-Three rules, recorded now so they are not rediscovered later:
+Both are written, as two blocks of the same token names in `UI/style.css`. The
+three rules this file set out before either existed all held:
 
-1. **Every value above is a token, and the stylesheet only ever uses tokens.**
-   A light theme is then a second block redefining them.
-2. **It is not an inversion.** Greys that read as correct on dark read as dirty
-   on light, and the accent needs to be *darker* on light rather than the same
-   hue lightened. Each token gets a value chosen for that theme.
-3. **The depth rule flips.** Dark gets depth from surfaces growing lighter as
-   they come forward; light gets it from borders and shadows, because a lighter
-   surface on white has nowhere left to go.
+1. **Every value is a token and the stylesheet only uses tokens.** Enforced by
+   `tests/test_theme.py`, which strips the two token blocks and fails on any
+   hex value, named colour or `rgb()` left in what remains.
+2. **The light theme is not an inversion.** No token has the same value in both.
+   The accent is the clearest case: `#5b9dd9` is 2.6:1 on white, fine as a block
+   behind dark text and nowhere near readable as the focus ring and button text
+   it also has to be, so light uses `#2a6fb0`.
+3. **The depth rule flips.** On dark the raised surface is the lightest; on
+   light the sunken one is the grey and the raised one is white, with borders
+   doing the work shadows do elsewhere. Also asserted, in both directions.
+
+### Three choices, two looks
+
+The stored setting is `system`, `dark` or `light`, and **`system` is the
+default** -- an app that ignores the OS setting is the odd one out. It is a
+stored choice like the other two rather than the absence of one, so the button
+cycles through all three and the label says which, resolving to `System (dark)`
+so the current look is never a guess.
+
+`system` is resolved **in JavaScript, not in CSS**. A media query would need a
+second copy of the light tokens to cover the system case, and rule 1 above is
+the whole design. `applyTheme()` resolves the choice and stamps `data-theme`,
+and a `matchMedia` listener re-resolves when the OS changes -- **only while the
+choice is `system`**, because someone who picked dark deliberately does not want
+it reverting at sunrise.
+
+### Contrast is measured, not asserted
+
+Every ratio quoted in this file is computed in `tests/test_theme.py` from the
+values as written. Body text and the state colours must clear 4.5:1 on every
+surface they appear on, and `--text-faint` -- documented above as below that and
+only used where the same thing is said another way -- must still clear 3:1.
+
+The surface that matters is the **sunken** one: the log sits on it, and the
+three state colours are used nowhere else. Two light values were chosen, looked
+correct, and failed there at 4.35:1 and 2.92:1. They were darkened. That is what
+the test is for.
 
 ## What this file does not cover
 
