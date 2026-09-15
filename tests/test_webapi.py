@@ -22,6 +22,8 @@ import time
 import pytest
 from PIL import Image
 
+from pathlib import Path
+
 from image_convertor import settings
 from image_convertor.webapi import Api
 
@@ -478,7 +480,9 @@ def test_a_second_conversion_is_refused_while_one_is_running(app, images):
 def test_cancelling_before_it_starts_stops_it_at_the_first_file(app, images):
     app._cancel.set()
     app._running = True
-    app._convert_all(images, sorted(images.iterdir()), None, None, (), False)
+    app._convert_all(
+        images, sorted(images.iterdir()), None, None, (), False, app._base / "output"
+    )
 
     assert events(app, "conversion_cancelled")[0]["done"] == 0
     assert outputs(app) == []
@@ -618,3 +622,157 @@ def test_the_window_is_not_reachable_from_a_public_attribute(app):
 
     assert "window" not in reachable
     assert "base" not in reachable
+
+
+# --- choosing where the results go ---------------------------------------
+
+def test_the_default_output_folder_is_beside_the_app(app, images):
+    described = app.describe_app()
+
+    assert described["output_folder"] == str(app._base / "output")
+    assert described["default_output_folder"] == str(app._base / "output")
+
+
+def test_a_remembered_output_folder_is_offered(app, images, tmp_path):
+    elsewhere = str(tmp_path / "results")
+    settings.save(settings.Settings(output_folder=elsewhere))
+
+    described = app.describe_app()
+
+    assert described["output_folder"] == elsewhere
+    assert described["default_output_folder"] == str(app._base / "output")
+
+
+def test_the_results_go_where_they_are_asked_to(app, images, tmp_path):
+    elsewhere = tmp_path / "results"
+
+    run(app, output_folder=str(elsewhere))
+
+    assert sorted(p.name for p in elsewhere.iterdir()) == ["black.png", "clear.png"]
+    assert not (app._base / "output").exists()
+
+
+def test_an_output_folder_that_does_not_exist_yet_is_created(app, images, tmp_path):
+    """It is somewhere to write, not somewhere to read -- it need not be there."""
+    deep = tmp_path / "a" / "b" / "c"
+
+    run(app, output_folder=str(deep))
+
+    assert deep.is_dir()
+    assert list(deep.iterdir())
+
+
+def test_writing_into_the_input_folder_is_refused(app, images):
+    """The one arrangement that destroys work on its own.
+
+    The results are images in the input folder, so the next run converts its
+    own output -- and with "same as the input" that run overwrites the
+    originals.
+    """
+    answer = app.start_conversion(str(images), "", "", [], True, str(images))
+
+    assert answer["ok"] is False
+    assert "input folder" in answer["error"]
+
+
+def test_the_same_folder_spelled_differently_is_still_refused(app, images):
+    """Resolved, not compared as typed -- "." and a long path are one folder."""
+    answer = app.start_conversion(
+        str(images), "", "", [], True, str(images / ".." / images.name)
+    )
+
+    assert answer["ok"] is False
+
+
+def test_a_file_where_the_output_folder_should_be_is_refused(app, images, tmp_path):
+    blocker = tmp_path / "results"
+    blocker.write_text("not a folder", encoding="utf-8")
+
+    answer = app.start_conversion("", "", "", [], True, str(blocker))
+
+    assert answer["ok"] is False
+    assert "Not a folder" in answer["error"]
+
+
+def test_an_unwritable_output_folder_is_refused_before_the_batch(app, images, monkeypatch, tmp_path):
+    """Found up front: it is the same answer for all two hundred files, and by
+    the time a save fails the conversion has already been done."""
+    def refuse(self, *args, **kwargs):
+        raise OSError("read-only")
+
+    monkeypatch.setattr(Path, "touch", refuse)
+
+    answer = app.start_conversion("", "", "", [], True, str(tmp_path / "results"))
+
+    assert answer["ok"] is False
+    assert "Cannot write" in answer["error"]
+
+
+def test_the_output_folder_is_remembered_when_it_is_not_the_default(app, images, tmp_path):
+    elsewhere = tmp_path / "results"
+
+    run(app, output_folder=str(elsewhere))
+
+    assert settings.load().output_folder == str(elsewhere)
+
+
+def test_the_default_output_folder_is_not_remembered_as_a_path(app, images):
+    """It is wherever the app is, so today's path would be wrong tomorrow."""
+    run(app)
+
+    assert settings.load().output_folder == ""
+
+
+def test_the_finished_event_names_the_folder_written_to(app, images, tmp_path):
+    elsewhere = tmp_path / "results"
+
+    run(app, output_folder=str(elsewhere))
+
+    assert events(app, "conversion_finished")[0]["output_folder"] == str(elsewhere)
+
+
+# --- one dialog, two fields ----------------------------------------------
+
+def test_the_dialog_says_which_field_it_was_opened_for(app, images, tmp_path):
+    app._window.dialog_returns = [str(tmp_path)]
+
+    app.choose_folder("output")
+
+    assert wait_for(lambda: folder_events(app))
+    assert folder_events(app)[0]["which"] == "output"
+
+
+def test_choosing_an_output_folder_does_not_count_images_in_it(app, tmp_path):
+    """It is somewhere to write; what is already there is not interesting."""
+    app._window.dialog_returns = [str(tmp_path)]
+
+    app.choose_folder("output")
+
+    assert wait_for(lambda: folder_events(app))
+    chosen = folder_events(app)[0]
+    assert chosen["ok"] and "count" not in chosen
+
+
+def test_choosing_an_input_folder_still_counts_them(app, images):
+    app._window.dialog_returns = [str(images)]
+
+    app.choose_folder("input")
+
+    assert wait_for(lambda: folder_events(app))
+    assert folder_events(app)[0]["count"] == 2
+
+
+def test_an_unknown_field_is_refused(app):
+    answer = app.choose_folder("sideways")
+
+    assert answer["ok"] is False
+    assert app._choosing is False
+
+
+def test_a_cancelled_dialog_still_says_which_field(app):
+    app._window.dialog_returns = None
+
+    app.choose_folder("output")
+
+    assert wait_for(lambda: folder_events(app))
+    assert folder_events(app)[0]["which"] == "output"

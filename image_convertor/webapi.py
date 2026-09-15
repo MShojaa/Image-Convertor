@@ -107,7 +107,11 @@ class Api:
             ],
             input_folder=str(beside) if beside.is_dir() else stored.input_folder,
             has_folder_beside=beside.is_dir(),
-            output_folder=str(self._base / OUTPUT_NAME),
+            # Unlike the input there is nothing to check: an output folder is
+            # somewhere to write, and it is allowed not to exist yet -- the
+            # first run that needs it creates it.
+            output_folder=stored.output_folder or str(self._base / OUTPUT_NAME),
+            default_output_folder=str(self._base / OUTPUT_NAME),
             settings={
                 "size": stored.size,
                 "output_format": stored.output_format,
@@ -116,8 +120,11 @@ class Api:
             },
         )
 
-    def choose_folder(self) -> dict:
+    def choose_folder(self, which: str = "input") -> dict:
         """Open the native folder picker. The answer arrives as an event.
+
+        One opener for both fields; `which` comes back on the event so the
+        page knows which box to fill in.
 
         **It must not open the dialog here**, and this is the one thing in this
         file that is not a matter of taste. A `js_api` method runs while the
@@ -139,18 +146,21 @@ class Api:
             # the first is open would open a second one behind it.
             return _fail("A folder dialog is already open.")
 
+        if which not in ("input", "output"):
+            return _fail(f"Unknown folder: {which}")
+
         self._choosing = True
-        threading.Thread(target=self._choose_folder, daemon=True).start()
+        threading.Thread(target=self._choose_folder, args=(which,), daemon=True).start()
         return _ok(opening=True)
 
-    def _choose_folder(self) -> None:
+    def _choose_folder(self, which: str) -> None:
         """The dialog, on its own thread, reporting back when it closes."""
         import webview
 
         try:
             chosen = self._window.create_file_dialog(webview.FOLDER_DIALOG)
         except Exception as error:
-            self._emit("folder_chosen", _fail(str(error)))
+            self._emit("folder_chosen", dict(_fail(str(error)), which=which))
             return
         finally:
             self._choosing = False
@@ -158,10 +168,17 @@ class Api:
         if not chosen:
             # Cancelled, which is not a failure -- the page leaves the folder
             # it already had rather than clearing it.
-            self._emit("folder_chosen", _ok(folder=None))
+            self._emit("folder_chosen", dict(_ok(folder=None), which=which))
             return
 
-        self._emit("folder_chosen", self.inspect_folder(chosen[0]))
+        if which == "output":
+            # Nothing to count or to check: it is somewhere to write.
+            self._emit(
+                "folder_chosen", dict(_ok(folder=str(chosen[0])), which="output")
+            )
+            return
+
+        self._emit("folder_chosen", dict(self.inspect_folder(chosen[0]), which="input"))
 
     def inspect_folder(self, folder: str) -> dict:
         """What is in a folder, for the page to show before anything runs."""
@@ -207,6 +224,7 @@ class Api:
         output_format: str,
         effects: list[str],
         remember: bool = True,
+        output_folder: str = "",
     ) -> dict:
         """Check everything, then start the batch on a worker thread.
 
@@ -225,6 +243,27 @@ class Api:
         if not images:
             return _fail(f"No images to convert in: {source}")
 
+        destination = (
+            Path(output_folder).expanduser()
+            if output_folder
+            else self._base / OUTPUT_NAME
+        )
+
+        # Writing the results into the folder being read is the one arrangement
+        # that goes wrong on its own: the outputs are images in the input
+        # folder, so the next run converts its own output -- and with "same as
+        # the input" that run overwrites the originals.
+        if _same_folder(destination, source):
+            return _fail(
+                "The output folder is the input folder. The next run would "
+                "convert these results again, and overwrite the originals. "
+                "Choose somewhere else."
+            )
+
+        refusal = _unwritable(destination)
+        if refusal:
+            return _fail(refusal)
+
         try:
             box = parse_size(size)
             chosen = formats.resolve(output_format) if output_format else None
@@ -237,7 +276,9 @@ class Api:
 
         worker = threading.Thread(
             target=self._convert_all,
-            args=(source, images, box, chosen, chosen_effects, remember),
+            args=(
+                source, images, box, chosen, chosen_effects, remember, destination,
+            ),
             daemon=True,   # a window closed mid-batch should not hold the app open
         )
         worker.start()
@@ -249,11 +290,12 @@ class Api:
         self._cancel.set()
         return _ok()
 
-    def _convert_all(self, source, images, box, chosen, effects, remember) -> None:
+    def _convert_all(
+        self, source, images, box, chosen, effects, remember, output_folder
+    ) -> None:
         """The batch, on the worker thread. Reports every file back to the page."""
         converted = failed = 0
         not_shrunk: list[str] = []
-        output_folder = self._base / OUTPUT_NAME
 
         try:
             for index, image_path in enumerate(images, start=1):
@@ -292,8 +334,12 @@ class Api:
 
             if remember and converted:
                 beside = self._base / INPUT_NAME
+                default_output = self._base / OUTPUT_NAME
                 settings.remember(
                     input_folder="" if source == beside else str(source),
+                    output_folder=(
+                        "" if output_folder == default_output else str(output_folder)
+                    ),
                     size=str(box) if box else "",
                     output_format=chosen.name if chosen else "",
                     effects=tuple(e.described() for e in order_effects(effects)),
@@ -323,6 +369,44 @@ class Api:
             self._window.evaluate_js(f"window.onAppEvent({event!r}, {_json(payload)})")
         except Exception:
             pass
+
+
+def _same_folder(one: Path, other: Path) -> bool:
+    """Whether two paths are the same folder, following links and shorthand.
+
+    Compared resolved rather than as typed: "." and an absolute path and a
+    path through a symlink are all the same folder, and the check that uses
+    this is there to stop a run that would eat its own input.
+    """
+    try:
+        return one.resolve() == other.resolve()
+    except OSError:
+        return False
+
+
+def _unwritable(folder: Path) -> str | None:
+    """Why the results cannot be written there, or None if they can.
+
+    Checked before the batch rather than discovered on the first file: a
+    folder that cannot be written is the same answer for all two hundred of
+    them, and by the time a save fails the conversion has already been done.
+    """
+    if folder.exists() and not folder.is_dir():
+        return f"Not a folder: {folder}"
+
+    try:
+        folder.mkdir(parents=True, exist_ok=True)
+    except OSError as error:
+        return f"Cannot create {folder}: {error}"
+
+    probe = folder / ".image-convertor-write-test"
+    try:
+        probe.touch()
+        probe.unlink()
+    except OSError as error:
+        return f"Cannot write to {folder}: {error}"
+
+    return None
 
 
 def _json(payload: dict) -> str:

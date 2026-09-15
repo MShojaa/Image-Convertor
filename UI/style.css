@@ -96,6 +96,16 @@
 
 * { box-sizing: border-box; }
 
+/* The page itself never scrolls: it is a fixed-height column and the log is
+   the part that scrolls inside it. Percentages rather than 100vh, because at
+   125% display scaling 100vh computes to a fraction of a pixel more than the
+   viewport and rounds up -- one pixel of overflow, and a scrollbar down the
+   whole window to show it. */
+html,
+body {
+  height: 100%;
+}
+
 body {
   margin: 0;
   background: var(--surface-sunken);
@@ -111,7 +121,7 @@ body {
   flex-direction: column;
   gap: var(--space-3);
   padding: var(--space-4);
-  min-height: 100vh;
+  height: 100%;
 }
 
 /* -- header ------------------------------------------------------------ */
@@ -242,6 +252,24 @@ body {
   background: var(--surface);
   color: var(--text-faint);
   cursor: default;
+}
+
+/* -- folders ----------------------------------------------------------- */
+
+/* One column for both labels, so the two paths start at the same x and read
+   as a pair rather than as two unrelated rows. */
+.folder-label {
+  width: 5.5rem;
+  flex: none;
+  font-size: var(--text-xs);
+  color: var(--text-dim);
+  line-height: var(--control-height);
+}
+
+/* Lined up under the path it belongs to, not under the label. */
+.folder-hint {
+  padding-left: 5.5rem;
+  min-height: 1em;
 }
 
 /* -- effects ----------------------------------------------------------- */

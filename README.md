@@ -30,8 +30,15 @@ Add `onedir` to `build.bat`/`run.bat`/`build-and-run.bat` for a folder build.
 
 The app reads every image in the `input` folder beside it and writes the results
 to an `output` folder beside it -- for the exe that is `dist\`, and running from
-source that is the project root. If there is no `input` folder it offers the one
-you used last time, and Browse picks another.
+source that is the project root. Both are shown in the window and both can be
+changed: Browse picks another, and **Default** puts the output folder back.
+
+If there is no `input` folder the app offers the one you used last time.
+
+Writing into the folder being read is refused. The results would be images in
+the input folder, so the next run would convert its own output -- and with the
+format left as "same as the input", the run after that would overwrite the
+originals.
 
 Then choose a size, a format and any effects, and press Convert. Every file is
 reported as it goes, and a file that fails does not stop the batch.
@@ -72,7 +79,7 @@ rest convert.
 
 ## What it remembers
 
-After a run it remembers the folder, the size, the format and the effects, in
+After a run it remembers both folders, the size, the format and the effects, in
 `%LOCALAPPDATA%\Image-Convertor\settings.json`, along with the theme. With no
 `input\` beside the app it offers the folder you used last time, and only if
 that folder is still there and still has images in it.
