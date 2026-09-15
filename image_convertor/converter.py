@@ -14,7 +14,9 @@ from pathlib import Path
 
 from PIL import Image
 
+from . import formats
 from .effects import Effect, apply_effects
+from .formats import Format
 
 # What we will try to open. Pillow reads more than this, but these are the ones
 # worth walking an input folder for; anything else is skipped with a message
@@ -138,8 +140,13 @@ def convert_image(
     destination: Path,
     box: Size | None = None,
     effects: tuple[Effect, ...] = (),
+    fmt: Format | None = None,
 ) -> Converted:
-    """Convert one file and write it as a 1-bit BMP.
+    """Convert one file and write it.
+
+    The format decides the container only; the effects decide the depth --
+    `monochrome` is what makes an image 1-bit. With no format given it is
+    taken from the source, which is what "the same as the input" means.
 
     The order is flatten, fit, then the effects -- and it is that way round for
     a reason. Flattening first means an effect never has to think about an
@@ -148,6 +155,9 @@ def convert_image(
     person choosing the number can see; applied first, most of the effect would
     be thrown away by the shrink that followed.
     """
+    if fmt is None:
+        fmt = formats.for_source(source)
+
     with Image.open(source) as opened:
         image = flatten_to_white(opened)
 
@@ -158,8 +168,7 @@ def convert_image(
 
     image = apply_effects(image, effects)
 
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    image.save(destination, format="BMP")
+    formats.save(image, destination, fmt)
 
     written = Size(*image.size)
     shrunk = written.width < original.width or written.height < original.height

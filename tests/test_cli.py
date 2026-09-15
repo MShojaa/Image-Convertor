@@ -123,9 +123,9 @@ def test_a_full_run_converts_the_input_folder(images, answers):
     answers("10x10", "2", "")  # size, hard cut, default level
 
     assert cli.main([]) == 0
-    assert output_files(images) == ["black.bmp", "clear.bmp"]
+    assert output_files(images) == ["black.png", "clear.png"]
 
-    with Image.open(images / cli.OUTPUT_NAME / "clear.bmp") as result:
+    with Image.open(images / cli.OUTPUT_NAME / "clear.png") as result:
         assert result.mode == "1"
         assert result.size == (10, 10)
 
@@ -134,7 +134,7 @@ def test_flags_run_it_without_any_questions(images, monkeypatch):
     monkeypatch.setattr(cli, "ask", lambda prompt="": pytest.fail("should not ask"))
 
     assert cli.main(["--size", "16x16", "--mode", "dither"]) == 0
-    with Image.open(images / cli.OUTPUT_NAME / "black.bmp") as result:
+    with Image.open(images / cli.OUTPUT_NAME / "black.png") as result:
         assert result.size == (16, 16)
 
 
@@ -142,7 +142,7 @@ def test_an_empty_size_flag_means_no_resizing(images, monkeypatch):
     monkeypatch.setattr(cli, "ask", lambda prompt="": pytest.fail("should not ask"))
 
     assert cli.main(["--size", "", "--mode", "dither"]) == 0
-    with Image.open(images / cli.OUTPUT_NAME / "clear.bmp") as result:
+    with Image.open(images / cli.OUTPUT_NAME / "clear.png") as result:
         assert result.size == (20, 16)
 
 
@@ -158,7 +158,7 @@ def test_a_missing_input_folder_asks_for_a_path(tmp_path, monkeypatch, answers):
     answers(f'"{elsewhere}"', "", "1")  # quoted path, no resize, dither
 
     assert cli.main([]) == 0
-    assert output_files(base) == ["one.bmp"]
+    assert output_files(base) == ["one.png"]
 
 
 def test_a_bad_path_is_asked_about_again(tmp_path, monkeypatch, answers, capsys):
@@ -207,7 +207,7 @@ def test_an_unreadable_file_does_not_stop_the_batch(images, capsys):
     assert code == 1  # the run is reported as failed ...
     assert "FAILED  broken.png" in printed
     assert "2 converted, 1 failed" in printed  # ... but the good ones are done
-    assert output_files(images) == ["black.bmp", "clear.bmp"]
+    assert output_files(images) == ["black.png", "clear.png"]
 
 
 def test_the_input_flag_overrides_the_input_folder(images, tmp_path, monkeypatch):
@@ -217,7 +217,7 @@ def test_the_input_flag_overrides_the_input_folder(images, tmp_path, monkeypatch
     monkeypatch.setattr(cli, "ask", lambda prompt="": pytest.fail("should not ask"))
 
     assert cli.main(["--input", str(elsewhere), "--size", "", "--mode", "dither"]) == 0
-    assert output_files(images) == ["only.bmp"]
+    assert output_files(images) == ["only.png"]
 
 
 # --- the "could not shrink" warning --------------------------------------
@@ -338,4 +338,63 @@ def test_no_effects_still_writes_the_files(images, monkeypatch):
     monkeypatch.setattr(cli, "ask", lambda prompt="": pytest.fail("should not ask"))
 
     assert cli.main(["--size", "8x8", "--effect", "none"]) == 0
-    assert output_files(images) == ["black.bmp", "clear.bmp"]
+    assert output_files(images) == ["black.png", "clear.png"]
+
+
+# --- the --format flag ---------------------------------------------------
+
+def test_the_output_is_named_for_the_input_format_by_default(tmp_path, monkeypatch):
+    """A png in gives a png out; a bmp in gives a bmp out."""
+    make_input(tmp_path, {"a.png": (8, 8)})
+    Image.new("RGB", (8, 8)).save(tmp_path / cli.INPUT_NAME / "b.bmp")
+    monkeypatch.setattr(cli, "base_folder", lambda: tmp_path)
+
+    assert cli.main(["--size", "", "--effect", "none"]) == 0
+    assert output_files(tmp_path) == ["a.png", "b.bmp"]
+
+
+def test_the_format_flag_writes_one_format_for_everything(tmp_path, monkeypatch):
+    make_input(tmp_path, {"a.png": (8, 8)})
+    Image.new("RGB", (8, 8)).save(tmp_path / cli.INPUT_NAME / "b.bmp")
+    monkeypatch.setattr(cli, "base_folder", lambda: tmp_path)
+
+    assert cli.main(["--size", "", "--effect", "none", "--format", "gif"]) == 0
+    assert output_files(tmp_path) == ["a.gif", "b.gif"]
+
+
+def test_an_unknown_format_is_refused_before_anything_is_written(tmp_path, monkeypatch, capsys):
+    make_input(tmp_path, {"a.png": (8, 8)})
+    monkeypatch.setattr(cli, "base_folder", lambda: tmp_path)
+
+    assert cli.main(["--size", "", "--effect", "none", "--format", "heic"]) == 1
+
+    assert "heic" in capsys.readouterr().out
+    assert not (tmp_path / cli.OUTPUT_NAME).exists()
+
+
+def test_monochrome_into_jpeg_fails_that_file_and_says_why(tmp_path, monkeypatch, capsys):
+    """The batch carries on -- one refused pairing is not a reason to stop."""
+    folder = tmp_path / cli.INPUT_NAME
+    folder.mkdir()
+    Image.new("RGB", (8, 8)).save(folder / "photo.jpg")
+    Image.new("RGB", (8, 8)).save(folder / "logo.png")
+    monkeypatch.setattr(cli, "base_folder", lambda: tmp_path)
+
+    code = cli.main(["--size", "", "--effect", "monochrome"])
+
+    printed = capsys.readouterr().out
+    assert code == 1
+    assert "FAILED  photo.jpg" in printed
+    assert "1-bit" in printed
+    assert output_files(tmp_path) == ["logo.png"]
+
+
+def test_the_format_is_printed_before_the_run(tmp_path, monkeypatch, capsys):
+    make_input(tmp_path, {"a.png": (8, 8)})
+    monkeypatch.setattr(cli, "base_folder", lambda: tmp_path)
+
+    cli.main(["--size", "", "--effect", "none"])
+    assert "Format:  same as the input" in capsys.readouterr().out
+
+    cli.main(["--size", "", "--effect", "none", "--format", "png"])
+    assert "Format:  png" in capsys.readouterr().out

@@ -1,7 +1,9 @@
 # Image-Convertor
 
-A CLI that converts a folder of images to 1-bit monochrome BMP files.
+A CLI that converts, resizes and applies effects to a folder of images.
 
+- Output is written in the same format as the input by default -- a png in
+  gives a png out -- or in one format for everything with `--format`.
 - Transparent areas become white.
 - Resizing only shrinks and always keeps the aspect ratio. A box with a
   different ratio is filled with white around the image rather than stretching
@@ -12,7 +14,8 @@ A CLI that converts a folder of images to 1-bit monochrome BMP files.
   on white at that size and a warning says so -- per image as it happens,
   and again at the end, where a run that shrank nothing at all is called
   out as such.
-- Two ways to reach black and white, and the app asks which: **dither**,
+- Effects are chosen, not compulsory: **blur**, **noise** and **monochrome**.
+  Monochrome is the 1-bit one, and it has two ways to get there -- **dither**,
   which scatters dots to keep shading and suits photographs, or **hard cut**,
   one threshold with flat areas left flat, which suits line art, icons, logos
   and text.
@@ -40,7 +43,8 @@ black and white.
 
 Mostly for scripting; the app asks for what it needs without them.
 
-    --input FOLDER       read from this folder instead of input\
+    --input FOLDER       read from this folder instead of input    --format NAME        png, jpg, bmp, gif, tiff or webp; default is the
+                         same format as each input file
     --size WxH           skip the size question (pass '' for no resizing)
     --effect NAME[:V]    an effect to apply, repeatable; --effect none
                          converts with no effects at all
@@ -73,6 +77,19 @@ default amount with seed 7.
 The noise **seed is fixed, not the clock**, so converting the same folder twice
 gives the same files. Pass a different seed when you want different noise --
 that is what the number is for.
+
+### Formats and one bit
+
+`monochrome` makes an image 1-bit, and not every format can hold that.
+**png, bmp and tiff** keep it. **gif and webp** store it as grey or as a
+palette, which looks identical because there are only two levels in it --
+webp is written lossless in that case so the dots survive. **jpg is
+refused**: it is lossy, so a dither comes back with ringing around every
+dot, and Pillow writes it anyway as 8-bit grey rather than complaining. The
+app stops instead, and says to use png, bmp or tiff.
+
+Only that pairing is refused. A colour jpg converts to a jpg as you would
+expect.
 
 **Blur into a hard cut** is the pairing worth knowing about: it is how a
 threshold gets a soft edge rather than a jagged one. **Noise into a hard

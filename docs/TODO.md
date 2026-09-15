@@ -57,31 +57,32 @@ It converts to grey first, because monochrome would throw the colour away
 anyway and noising three channels independently makes speckle that grey
 averages back out.
 
-## 3. An output format
+## 3. An output format -- DONE
 
-Choose the image format written, rather than always writing a 1-bit BMP.
+`image_convertor/formats.py`. `--format png|jpg|bmp|gif|tiff|webp`, defaulting
+to the source's own format per file, so a png in gives a png out and a mixed
+folder stays mixed. `.jpeg` and `.tif` resolve to the same formats as `.jpg`
+and `.tiff`; `.ico` reads but cannot be written back at an arbitrary size, so
+"the same as the input" falls back to png for those.
 
-- **Default: the same as the input.** A `.png` in gives a `.png` out. That is
-  the stated default and it is a change in behaviour -- today everything comes
-  out `.bmp` -- so it wants a line in the README and, by the rules in
-  `workflow.md`, is arguably a **major** bump: a script that globs `output\*.bmp`
-  stops finding anything. Raise that at merge time rather than inferring minor
-  from the `feat/` prefix.
-- **The formats.** `png`, `jpg`, `bmp` (8-bit or 24-bit), and `monochrome
-  bitmap` -- today's 1-bit BMP -- at least. The last one is not a format so much
-  as a format plus a mode, which is the thing to get right in the design: **the
-  output format and the colour depth are two separate questions** that today's
-  code answers with one answer.
-- **The awkward pairs.** JPEG cannot hold a 1-bit image, and cannot hold
-  transparency; `mode "1"` saved as JPEG raises rather than silently converting.
-  Every format/depth pair needs to be either supported or refused with a
-  sentence saying why -- refusing is fine, failing at `image.save()` with a
-  Pillow traceback is not.
-- **Where it goes.** `convert_image()` decides the extension today by string
-  concatenation in `cli.py` (`image_path.stem + ".bmp"`). That moves into the
-  converter with the format.
-- **Ask it, like the others.** Same shape as the size and mode questions: a
-  prompt with a default, and a `--format` flag that skips it.
+**This was the breaking one, and it took the major bump to 2.0.0.** Everything
+used to land as `.bmp`; a script globbing `output\*.bmp` now finds nothing.
+
+The separation the old entry asked for is real: the format is the container
+and the effects decide the depth. There is no "monochrome bitmap" format,
+because it would be a second way to say `--format bmp --effect monochrome`.
+
+**The awkward pair turned out to be worse than expected.** Pillow does not
+refuse a 1-bit image saved as JPEG -- it writes 8-bit grey and says nothing,
+so a dither comes back ringing with no error anywhere. `formats.refuse_reason`
+is what stops it, before the file is written, and the message names the way
+out. Nothing else is refused: gif and webp store two levels perfectly well
+(webp is forced lossless when the image is 1-bit, since it is lossy by
+default and that is JPEG's problem again).
+
+In a batch the refusal fails that one file and the run carries on, which is
+how an unreadable file already behaved -- a mixed folder converted to "the
+same as the input" should not be stopped by the one jpg in it.
 
 ## 4. An option for the input folder
 
