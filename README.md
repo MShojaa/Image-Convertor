@@ -54,3 +54,11 @@ Mostly for scripting; the app asks for what it needs without them.
 failure. They cover the rules that are easy to break by accident: transparency
 landing on white, the aspect-ratio fit and its centring, shrink-only resizing,
 the two black-and-white modes, and what the app asks for and accepts.
+
+## Working on it
+
+`docs/` holds the rest, and `docs/workflow.md` is the one to read first -- it is
+the standing rules for how changes get made here: a branch per change, the tests
+before a commit, and `scripts\merge.bat` to land one. `docs/graphify.md` is the
+knowledge graph the repo builds of itself, and `docs/TODO.md` is what is
+specified and not yet written.
