@@ -211,6 +211,46 @@ python scripts\bump_version.py --next minor
 `tests/test_version.py` asserts only the shape -- three dotted numbers, and that
 `--version` prints that same number -- so it needs no edit per bump.
 
+## main is the release branch
+
+Two long-lived branches, and they answer different questions:
+
+- **`develop`** is the latest work. Every branch lands here, and it moves
+  several times between releases.
+- **`main`** is the latest released build. It moves only at a release, and it
+  only ever fast-forwards.
+
+So `main` is what to check out to get the last thing that shipped, and the
+question "what is actually released?" has an answer that is a branch name rather
+than an archaeology exercise over tags.
+
+A release is a deliberate act, not a side effect of merging:
+
+```bash
+git checkout main
+git merge --ff-only develop    # refuses if develop is not ahead -- see below
+git checkout develop           # get back before doing anything else
+```
+
+**`--ff-only`, always.** A plain `git merge` here would happily make a merge
+commit, and a merge commit on `main` means `main` has content `develop` does not
+-- at which point the two branches have diverged and every later release needs a
+real merge with real conflicts. The flag refuses instead of doing that, and a
+refusal means something has been committed to `main` directly, which is the thing
+to go and find out about.
+
+**Never commit on `main`.** It has no commits of its own, by construction. It is
+a pointer that follows `develop`.
+
+**The tag is made by the merge, not by the release.** `scripts\merge.bat` tags
+`v1.2.0` on `develop` when the feature lands, so by the time `main` fast-forwards
+the tag is already in the history it is picking up. Releasing does not tag
+anything -- if it did, the same build would carry two.
+
+Which is also why `main` is normally *behind* by the merges that carried no
+version: a docs branch bumps nothing, so there is nothing new to release and
+`main` stays where it is until the next feature or fix lands.
+
 ## Reporting back
 
 If the tests passed, don't narrate the work. A brief is enough -- what branch it
