@@ -39,8 +39,8 @@ echo Installing packages
 "%PY%" -m pip install --upgrade pip --quiet
 if errorlevel 1 goto :failed
 
-rem Pillow, pytest and PyInstaller -- everything the other scripts in this
-rem folder need. requirements-dev.txt pulls in requirements.txt itself.
+rem Pillow, pywebview, pytest and PyInstaller -- everything the other scripts
+rem in this folder need. requirements-dev.txt pulls in requirements.txt.
 "%PY%" -m pip install -r "%ROOT%\requirements-dev.txt" pyinstaller
 if errorlevel 1 goto :failed
 

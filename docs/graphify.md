@@ -73,17 +73,17 @@ graphify's side. It is measuring against a setup where the graph is committed.
 Do not fix it by putting the line back.
 
 `god-nodes` is the useful one: it prints the most connected nodes, so if the
-names coming back are the real hubs, extraction worked. **Here that is `Size`,
-`main()`, `answers()`, `convert_image()` and `rows()`.**
+names coming back are the real hubs, extraction worked. **Here that is
+`Monochrome`, `load()`, `convert_image()`, `Settings` and `Size`.**
 
-Two of those five are from `tests/`, which is worth reading correctly rather than
-as a fault: `answers()` is the fixture that feeds lines to `input()` and `rows()`
-renders an image as text to assert on, so both are reached from nearly every
-test in their file. The tests are extracted alongside the app, and in a repo
-this size they are the larger half.
+They are the right ones: the effect every conversion ends with, the settings
+read at startup, the function the whole app exists to call, and the two values
+that cross every boundary in it. The tests are extracted alongside the app and
+are the larger half of the repo, so a hub from `tests/` appearing here is not a
+fault -- it means a fixture that nearly every test in its file reaches.
 
 The size is worth knowing too -- the point of it is to notice a *collapse*, not
-to match a figure. It was 144 nodes and 299 edges over 10 files at the time of
+to match a figure. It was 480 nodes and 898 edges over 25 files at the time of
 writing, and a number in prose goes out of date immediately: committing this file
 adds nodes for it. Read the current one instead of trusting the sentence:
 
@@ -118,7 +118,8 @@ parentheses (`convert_image()`, `fit_into_box()`); classes and modules do not
 
 ### What it is built from
 
-Ten files: every `.py`, `.md` and `.txt` in the repo, tests and README included.
+Every `.py`, `.md`, `.txt`, `.html` and `.js` in the repo, tests and README
+included.
 `manifest.json` lists them, which is the fastest way to answer "is this file in
 the graph at all":
 
@@ -126,25 +127,33 @@ the graph at all":
 python -c "import json;print('\n'.join(sorted(json.load(open('graphify-out/manifest.json')))))"
 ```
 
-**The `.bat` scripts are not in it**, and neither is `Image-Convertor.spec` --
-there is no extractor for either. So `scripts\merge.bat`, `scripts\check.bat` and
+**The `.bat` scripts are not in it**, and neither is `UI/style.css` or
+`Image-Convertor.spec` -- there is no extractor for any of them. So `scripts\merge.bat`, `scripts\check.bat` and
 the rest of the workflow are invisible to the graph: a question about what a
 script does is a question for `workflow.md` and the comments in the file itself.
 That is most of `scripts/`, which is the one real blind spot here.
 
-### It is one process, so traversal means what it says
+### The graph stops at the bridge
 
-Worth stating because it is not true everywhere. This app is a single Python
-process: `main.py` calls into `image_convertor.cli`, which calls
-`image_convertor.converter`, and nothing crosses a language or a runtime lookup
-on the way. There is no `js_api`-style bridge for an AST extractor to lose the
-thread at.
+**Not one edge in this graph connects `UI/` to `image_convertor/`.** Measured,
+not assumed: 22 nodes from `UI/`, 377 from the Python, and zero edges between
+the two groups. The window
+reaches Python through pywebview's `js_api` -- `window.pywebview.api.start_conversion(...)`
+in `app.js` arriving at `Api.start_conversion` in `webapi.py` -- and that is a
+string lookup at runtime, which an AST extractor cannot see and does not invent.
 
-So `path` and `affected` traverse the whole app, and **a "no path found" here is
-a real answer** rather than an artefact -- unlike a project with a frontend,
-where the two halves are simply not connected in the graph at all. Keep this
-paragraph honest if the pywebview GUI in `TODO.md` ever lands: it would introduce
-exactly that bridge, and this section would become wrong on the day it does.
+So `path` and `affected` **never cross from a JS symbol to a Python one**, and a
+"no path found" between the two halves means nothing at all. `query` still
+returns both sides of a question, because it seeds from name matches rather than
+by traversing.
+
+Within either half the traversal is real: `main.py` to `webapi.py` to
+`converter.py` to `effects.py` is one process with no lookup in the middle, and
+`affected "to_monochrome"` genuinely lists everything that would break.
+
+For anything that crosses the bridge, `docs/design-system.md` and the module
+docstring in `webapi.py` are the map -- the latter is deliberately explicit
+about what may cross and in what shape, because the graph cannot be.
 
 ### When a lookup does not answer
 
@@ -237,12 +246,13 @@ Ask whether any *extracted* file changed instead:
 
 ```bash
 STAMP=$(python -c "import json;print(json.load(open('graphify-out/graph.json'))['built_at_commit'])")
-git diff --stat $STAMP HEAD -- '*.py' '*.md' '*.txt'
+git diff --stat $STAMP HEAD -- '*.py' '*.md' '*.txt' '*.html' '*.js'
 ```
 
 Empty means the graph is current whatever the two hashes say. Note the globs:
-the `.bat` files and the PyInstaller spec are **not** extracted, so a commit
-touching only `scripts/` never dates the graph either.
+the `.bat` files, `UI/style.css` and the PyInstaller spec are **not**
+extracted, so a commit touching only `scripts/` or the stylesheet never dates
+the graph either.
 
 **Collapsed** -- the graph has lost most of its nodes, and lookups start answering
 *no node matching* for names that certainly exist. Check the size:

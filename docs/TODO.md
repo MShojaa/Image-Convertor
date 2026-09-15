@@ -116,44 +116,60 @@ happened while writing this.
 
 Still stored but unused: `theme`, which item 6 reads.
 
-## 5. A GUI, with pywebview
+## 5. A GUI, with pywebview -- DONE
 
-A window over the same converter, with a `docs/design-system.md` to go with it.
+`UI/index.html`, `UI/style.css`, `UI/app.js`, and `image_convertor/webapi.py`
+as the only Python that knows the page exists. `main.py` is now the window and
+nothing else.
 
-- **`docs/design-system.md` comes first**, not after. It is the palette, the
-  type scale, the spacing metrics and the component rules, written down before
-  anything is styled, because a stylesheet written first becomes the spec by
-  accident and then nobody can change a colour without checking six places.
-  **Dark theme first** -- item 6 is the light one.
-- **The boundary is the point.** `image_convertor/converter.py` knows nothing
-  about the CLI today and must learn nothing about the GUI either. The window
-  talks to a small API object; that object calls the same `convert_image()` the
-  CLI calls. If the GUI needs a change in `converter.py` that the CLI would not
-  want, that is the signal the boundary is being crossed in the wrong place.
-- **What the window needs that the CLI does not.** Progress over a folder that
-  may hold hundreds of images; a preview of one conversion before running the
-  batch; and somewhere to show the "could not shrink" warnings, which in the CLI
-  are just lines that scroll past.
-- **Threading.** pywebview's event loop and a batch conversion do not share a
-  thread. The conversion runs on a worker and reports back; doing it inline
-  freezes the window for the length of the batch, which on a big folder looks
-  exactly like a crash.
-- **It breaks a claim in `graphify.md`.** The graph currently traverses the whole
-  app because there is one process and no runtime bridge. pywebview's `js_api` is
-  a string lookup an AST extractor cannot see, so the day this lands, no edge
-  will connect the frontend to `image_convertor/`. Fix that section in the same
-  change -- `workflow.md` says a stale note is worse than no note, and this one
-  would be actively misleading.
-- **Keep the CLI.** It is what scripts drive and what the tests exercise. The
-  GUI is a second front end, not a replacement.
+**`docs/design-system.md` was written first**, as the old entry insisted, and
+it earned that: the stylesheet uses nothing but tokens, which is what makes
+item 6 a second block of values rather than a second stylesheet.
+
+**BREAKING, and it took the major bump to 3.0.0: the CLI is gone.**
+`image_convertor/cli.py` and its 54 tests were deleted. The coverage they
+carried that was about behaviour rather than prompts -- folder resolution, a
+file that fails mid-batch, the shrink warning, what is remembered -- moved to
+`tests/test_webapi.py`. Anything that drove the exe from a script needs
+rewriting against the library, which is unchanged and importable.
+
+What the old entry called out, and how it went:
+
+- **The boundary held.** `converter.py` and `effects.py` learned nothing about
+  a window. `webapi.py` is the only module that imports in both directions.
+- **Threading was necessary.** The batch runs on a worker thread and reports
+  each file back through `window.evaluate_js`; inline it would freeze the
+  window for the length of the batch, which looks exactly like a crash.
+- **Everything crossing the bridge is JSON.** A `Path` arrives on the other
+  side as an empty object, silently. Every method returns plain data, and
+  failures come back as `{ok: false, error}` rather than raising, because an
+  exception in a `js_api` method reaches JavaScript as pywebview's message
+  rather than the sentence written here.
+- **It broke the claim in `graphify.md`, as predicted**, and that section was
+  rewritten in the same change. Measured afterwards: 22 nodes from `UI/`, 377
+  from the Python, zero edges between them.
+
+**`UI/` has no test coverage.** There is no JavaScript runner in this project,
+so `app.js` is checked by running the app and everything it may ask for is
+tested through `webapi.py`. That is a real gap, not an oversight.
+
+One thing worth knowing for anyone driving the window from Python: pywebview's
+`evaluate_js` is unreliable for some DOM reads -- `querySelectorAll(...).length`
+came back 0 and `element.dataset.name` came back empty for elements that
+demonstrably existed, while `getAttribute()` and `outerHTML` on the same
+elements were correct. It cost an hour of chasing a bug that was not there.
 
 ## 6. A light theme
 
 The same window, in light.
 
-- **Waits on item 5**, and specifically on `design-system.md` being real. A
-  theme is a second set of values for tokens the first theme established; if the
-  dark theme hardcoded its colours, this item begins by undoing that.
+- **Item 5 is done and `design-system.md` is real**, so this is now what it was
+  meant to be: a second block redefining the tokens on `:root`. The stylesheet
+  hardcodes nothing, so nothing has to be undone first. The empty block and the
+  comment saying so are already in `UI/style.css`.
+- **The toggle already exists.** The button, `applyTheme()` and `save_theme()`
+  are written and the choice is already stored and read back at startup -- it
+  flips `data-theme` on the root and today nothing answers to `light`.
 - **Tokens, not a second stylesheet.** One set of CSS custom properties, two
   sets of values, switched at the root. A duplicated stylesheet drifts within a
   week.

@@ -16,7 +16,6 @@ from pathlib import Path
 import pytest
 
 import image_convertor
-from image_convertor import cli
 
 ROOT = Path(__file__).resolve().parent.parent
 BUMP = ROOT / "scripts" / "bump_version.py"
@@ -26,13 +25,20 @@ def test_the_version_is_three_dotted_numbers():
     assert re.fullmatch(r"\d+\.\d+\.\d+", image_convertor.__version__)
 
 
-def test_the_version_flag_prints_that_same_number(capsys):
-    """--version reads __version__; nothing else may define the number."""
-    with pytest.raises(SystemExit) as exited:
-        cli.main(["--version"])
+def test_the_version_flag_prints_that_same_number():
+    """--version reads __version__; nothing else may define the number.
 
-    assert exited.value.code == 0
-    assert capsys.readouterr().out.strip() == image_convertor.__version__
+    Through a subprocess because main.py imports webview at module level and
+    the point is the number, not the window.
+    """
+    result = subprocess.run(
+        [sys.executable, str(ROOT / "main.py"), "--version"],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+
+    assert result.stdout.strip() == image_convertor.__version__
 
 
 def bump(*args):

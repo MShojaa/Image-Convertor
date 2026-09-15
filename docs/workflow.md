@@ -9,6 +9,7 @@ Read these; do not restate them. This file is the rules, they are the detail.
 
 | file | read it before |
 |---|---|
+| `design-system.md` | adding or changing anything the user sees -- the palette, the type, the metrics, the components. |
 | `graphify.md` | asking the knowledge graph anything, or when its answers look wrong. |
 | `TODO.md` | starting something new -- it may already be written down, specified, and parked. |
 
@@ -25,15 +26,16 @@ what, where something lives, or what a change touches, **before** reading files
 one by one. A question about the architecture is a graphify query first.
 
 ```bash
-graphify query "what happens to a transparent pixel?"
+graphify query "what happens when a conversion is started?"
 graphify update .        # after a pull or a merge -- the hooks do not cover those
 ```
 
-**The graph is not committed**, and it covers the Python only: the `.bat` scripts
-have no extractor, so a question about `scripts\` is not a question the graph can
-answer. It is one language in one process here, with no runtime bridge to break
-traversal, so `affected` and `path` mean what they say -- which is not true of
-every project.
+**The graph is not committed**, and two things are outside it. The `.bat`
+scripts and `UI/style.css` have no extractor, so a question about `scripts\` or
+the stylesheet is not one the graph can answer. And **it stops at the bridge**:
+no edge connects `UI/` to `image_convertor/`, because pywebview's `js_api` is a
+runtime string lookup an AST extractor cannot see. Within either half the
+traversal is real.
 
 `graphify.md` is the rest of it: the other commands, keeping it current, what to
 do when an answer looks wrong, why none of it is committed, and which commands
@@ -64,10 +66,17 @@ Tests live in `tests/`, one file per area, run by pytest through the wrapper:
 scripts\check.bat
 ```
 
-`tests/test_converter.py` covers the conversion rules -- transparency onto white,
-the aspect-ratio fit and its centring, shrink-only resizing, the two
-black-and-white modes. `tests/test_cli.py` covers the app around them: what it
-asks, what it accepts, and what it warns about. A new feature or fix adds its
+`tests/test_converter.py` covers the conversion rules -- transparency onto
+white, the aspect-ratio fit and its centring, shrink-only resizing.
+`test_effects.py` and `test_formats.py` cover the effects and the containers,
+`test_settings.py` what is remembered and every way the file can be wrong, and
+`test_webapi.py` covers the app around all of it: what the window may ask for,
+what a batch does with a file that fails, and what it warns about.
+
+**`UI/` is not covered**, and that is a real gap rather than an oversight:
+there is no JavaScript runner in this project. Everything `app.js` is allowed
+to ask for is tested through `webapi.py`, and the page itself is checked by
+running the app. A new feature or fix adds its
 checks to whichever of those it belongs in, or to a new `tests/test_*.py`, which
 is picked up by being put there -- pytest globs the folder and `pytest.ini`
 points at it.
