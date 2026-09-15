@@ -58,6 +58,18 @@ is applied -- naming the same effect twice keeps the last one. The order is
 fixed because most orderings are wrong: monochrome leaves an image with two
 levels, so anything working on grey has to come first.
 
+### The effects
+
+    blur[:RADIUS]        gaussian blur, default 1 pixel; fractional radii
+                         are the useful ones on a small image
+    monochrome[:0-255]   black and white; with a threshold it is a hard
+                         cut, without one it dithers
+
+**Blur into a hard cut** is the pairing worth knowing about: it is how a
+threshold gets a soft edge rather than a jagged one. Blur into a dither
+mostly cancels out -- dithering is already scattering dots to fake the grey
+levels the blur just made.
+
 ## Tests
 
 `scripts\check.bat` runs them; it passes its arguments to pytest, so

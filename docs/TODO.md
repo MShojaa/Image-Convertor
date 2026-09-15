@@ -17,23 +17,19 @@ deliberately rather than bolting a flag on each time.
 
 ---
 
-## 1. A blur effect
+## 1. A blur effect -- DONE
 
-Gaussian blur, as one of the conversion types.
+`Blur(radius)` in `effects.py`, Pillow's `ImageFilter.GaussianBlur`, no new
+dependency. `--effect blur` takes the default 1 pixel, `--effect blur:2.5`
+says otherwise. The radius is a float: below 1 is the useful range on a small
+image. A radius of 0 is the identity rather than an error, which a slider
+starting at zero needs; a negative one is refused.
 
-- **Where it goes.** `converter.py`, beside `to_monochrome()`. Pillow already
-  has it: `ImageFilter.GaussianBlur(radius)` -- no new dependency.
-- **Where in the pipeline.** After the fit, before the black-and-white step.
-  Blurring first and shrinking second throws away most of the blur; blurring a
-  1-bit image is meaningless because there is nothing between black and white
-  left to smear.
-- **What to ask.** A radius, in pixels. It needs a default (1.0 is the usual
-  starting point) and it is a float, not an int -- radii below 1 are the useful
-  ones on small images.
-- **Watch for.** Blur plus hard cut is the combination that does something
-  visually interesting -- it is how you get a soft-edged threshold rather than a
-  jagged one. Blur plus dither mostly cancels out. Worth a line in the README
-  saying so, since a user will otherwise try the pairing that does nothing.
+It runs at order 10, before monochrome, which is the only ordering that does
+anything -- a 1-bit image has no levels between black and white left to smear.
+
+The README says which pairing is worth reaching for (blur into a hard cut,
+for a soft-edged threshold) and which does nothing (blur into a dither).
 
 ## 2. A noise effect
 
