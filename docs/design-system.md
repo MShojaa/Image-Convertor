@@ -152,6 +152,17 @@ The button disables itself while the folder dialog is open and re-enables when
 it closes. The dialog is modal and the page is not, so without that a second
 click opens a second dialog behind the first.
 
+### The folders panel
+
+Both folders live in one panel, because they are the same question asked twice
+and a heading between them costs a row of height to say so. The labels share a
+5.5rem column so the two paths start at the same x and read as a pair, and each
+hint is indented to sit under its path rather than under its label.
+
+The output folder has a **Default** button next to Browse. Typing a path is how
+you get away from the default; without that button there is no way back to it
+short of retyping it, and it is the one path the user never chose.
+
 ### Controls
 
 Every input, select and button is `--control-height` tall, `--radius`,
@@ -249,6 +260,15 @@ The surface that matters is the **sunken** one: the log sits on it, and the
 three state colours are used nowhere else. Two light values were chosen, looked
 correct, and failed there at 4.35:1 and 2.92:1. They were darkened. That is what
 the test is for.
+
+## The page never scrolls
+
+`#app` is a fixed-height flex column and the log is the part that scrolls
+inside it. The height is `100%` of `html`/`body`, **not `100vh`**: at 125%
+display scaling `100vh` computes to a fraction of a pixel more than the
+viewport and rounds up, which is one pixel of overflow and a scrollbar down the
+whole window to show it. That is not a hypothetical -- it is what the window
+did, and the fix is the percentage.
 
 ## The window's size
 

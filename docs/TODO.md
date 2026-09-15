@@ -250,6 +250,14 @@ What was decided rather than deferred:
 - **Effects run after the fit**, so a blur radius or a noise amount is in
   output pixels -- the only size the person choosing the number can see.
 
+Since then, and not from the seven: the window gained an **output folder**
+beside the input one, so the results no longer have to land next to the app.
+Writing into the folder being read is refused rather than allowed -- the results
+are images in the input folder, so the next run converts its own output, and
+with "same as the input" the run after that overwrites the originals. An
+unwritable destination is refused up front too, because it is the same answer
+for every file in the batch and by the time a save fails the work is done.
+
 Still open, and now the only thing left in this file:
 
 - **A single file where a folder is accepted.** `find_images()` takes a folder

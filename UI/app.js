@@ -12,6 +12,8 @@
 
 const state = {
   folder: "",
+  outputFolder: "",
+  defaultOutputFolder: "",
   theme: "system",
   effects: [],      // what the app told us exists, in the order they run
   formats: [],
@@ -48,11 +50,17 @@ async function start() {
       "No input folder beside the app. Choose one with Browse.";
   }
 
+  state.defaultOutputFolder = info.default_output_folder;
+  setOutputFolder(info.output_folder);
+
   wire();
 }
 
 function wire() {
-  el("browse").addEventListener("click", browse);
+  el("browse").addEventListener("click", () => browse("input"));
+  el("browse-output").addEventListener("click", () => browse("output"));
+  el("reset-output").addEventListener("click", () => setOutputFolder(state.defaultOutputFolder));
+  el("output-folder").addEventListener("change", (event) => setOutputFolder(event.target.value));
   el("convert").addEventListener("click", convert);
   el("cancel").addEventListener("click", () => window.pywebview.api.cancel_conversion());
   el("theme-toggle").addEventListener("click", toggleTheme);
@@ -168,23 +176,42 @@ function chosenEffects() {
 
 /* -- the folder --------------------------------------------------------- */
 
-async function browse() {
+async function browse(which) {
   /* The folder comes back as a "folder_chosen" event, not as this call's
      result: the dialog cannot be opened from inside a js_api call without
      deadlocking the window. See choose_folder() in webapi.py. */
-  el("browse").disabled = true;
-  const answer = await window.pywebview.api.choose_folder();
+  browseButtons(true);
+  const answer = await window.pywebview.api.choose_folder(which);
   if (!answer.ok) {
-    el("browse").disabled = false;
+    browseButtons(false);
     fail(answer.error);
   }
 }
 
+/* Both at once: the dialog is modal, so while one is open neither button can
+   usefully be pressed. */
+function browseButtons(disabled) {
+  el("browse").disabled = disabled;
+  el("browse-output").disabled = disabled;
+}
+
 function folderChosen(data) {
-  el("browse").disabled = false;
+  browseButtons(false);
   if (!data.ok) return fail(data.error);
   if (!data.folder) return;            // cancelled, which is not a failure
-  setFolder(data.folder, false, data.count);
+
+  if (data.which === "output") {
+    setOutputFolder(data.folder);
+  } else {
+    setFolder(data.folder, false, data.count);
+  }
+}
+
+function setOutputFolder(folder) {
+  state.outputFolder = folder;
+  el("output-folder").value = folder;
+  el("output-status").textContent =
+    folder === state.defaultOutputFolder ? "The output folder beside the app." : "";
 }
 
 function setFolder(folder, beside, count) {
@@ -209,7 +236,9 @@ async function convert() {
     state.folder,
     el("size").value,
     el("format").value,
-    chosenEffects()
+    chosenEffects(),
+    true,
+    state.outputFolder
   );
 
   if (!answer.ok) return fail(answer.error);

@@ -41,6 +41,10 @@ class Settings:
     #: the app. Empty means "no memory of one".
     input_folder: str = ""
 
+    #: Where the results were written, when it was not the folder beside the
+    #: app. Empty means that default, the same as for the input.
+    output_folder: str = ""
+
     #: The last size box, as typed ("128x64"). Empty means no resizing.
     size: str = ""
 

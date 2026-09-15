@@ -17,14 +17,26 @@
       </div>
     </header>
 
-    <section class="panel" aria-labelledby="source-heading">
-      <h2 id="source-heading" class="label">Images</h2>
+<!-- One panel, not two: they are the same question asked twice, and a
+         heading between them only adds a row of height to say so. -->
+    <section class="panel" aria-labelledby="folders-heading">
+      <h2 id="folders-heading" class="label">Folders</h2>
+
       <div class="row">
+        <label class="folder-label" for="folder">Read from</label>
         <input type="text" id="folder" class="control grow mono" spellcheck="false"
-               aria-label="Folder to read images from" placeholder="No folder chosen">
+               placeholder="No folder chosen">
         <button type="button" id="browse" class="button secondary">Browse</button>
       </div>
-      <p id="folder-status" class="hint" role="status"></p>
+      <p id="folder-status" class="hint folder-hint" role="status"></p>
+
+      <div class="row">
+        <label class="folder-label" for="output-folder">Write to</label>
+        <input type="text" id="output-folder" class="control grow mono" spellcheck="false">
+        <button type="button" id="browse-output" class="button secondary">Browse</button>
+        <button type="button" id="reset-output" class="button secondary">Default</button>
+      </div>
+      <p id="output-status" class="hint folder-hint" role="status"></p>
     </section>
 
     <section class="panel" aria-labelledby="output-heading">
