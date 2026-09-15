@@ -146,6 +146,12 @@ documented way to do it without breaking transition-end handlers.
 
 ## The components
 
+### Browse
+
+The button disables itself while the folder dialog is open and re-enables when
+it closes. The dialog is modal and the page is not, so without that a second
+click opens a second dialog behind the first.
+
 ### Controls
 
 Every input, select and button is `--control-height` tall, `--radius`,

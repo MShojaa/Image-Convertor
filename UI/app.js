@@ -169,10 +169,22 @@ function chosenEffects() {
 /* -- the folder --------------------------------------------------------- */
 
 async function browse() {
+  /* The folder comes back as a "folder_chosen" event, not as this call's
+     result: the dialog cannot be opened from inside a js_api call without
+     deadlocking the window. See choose_folder() in webapi.py. */
+  el("browse").disabled = true;
   const answer = await window.pywebview.api.choose_folder();
-  if (!answer.ok) return fail(answer.error);
-  if (!answer.folder) return;          // cancelled, which is not a failure
-  setFolder(answer.folder, false, answer.count);
+  if (!answer.ok) {
+    el("browse").disabled = false;
+    fail(answer.error);
+  }
+}
+
+function folderChosen(data) {
+  el("browse").disabled = false;
+  if (!data.ok) return fail(data.error);
+  if (!data.folder) return;            // cancelled, which is not a failure
+  setFolder(data.folder, false, data.count);
 }
 
 function setFolder(folder, beside, count) {
@@ -215,7 +227,9 @@ async function convert() {
    say arrives here, which is why it is a single function with a switch rather
    than a handful of globals the Python side has to remember the names of. */
 window.onAppEvent = function (event, data) {
-  if (event === "file_converted") {
+  if (event === "folder_chosen") {
+    folderChosen(data);
+  } else if (event === "file_converted") {
     log(`${data.name} -> ${data.written} (${data.size})`, "");
     if (data.warning) log(`  WARNING  ${data.warning}`, "warn");
     progress(data.index, data.total);
