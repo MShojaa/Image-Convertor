@@ -22,13 +22,53 @@ from image_convertor import __version__
 from image_convertor.webapi import Api
 
 WINDOW_TITLE = "Image Convertor"
-MIN_SIZE = (720, 620)
+
+# What the page actually needs. Measured rather than picked: the controls come
+# to 684px with the log at its 6rem minimum, and the log is the part worth
+# having room -- it is one line per file and the only place a warning is
+# explained. 240px of it plus the controls plus the window chrome is where 960
+# comes from. The width is the widest row (786px) with slack for a long path.
+WANTED_SIZE = (920, 960)
+
+# Small enough to still be usable on a laptop, large enough that the layout
+# does not collapse into a column of squeezed panels.
+MIN_SIZE = (720, 560)
+
+# Left for the taskbar and the window's own titlebar and borders. webview
+# reports the whole screen, not the work area, so a window sized to the full
+# height would have its bottom edge behind the taskbar -- and the Convert
+# button is at the bottom.
+SCREEN_MARGIN = (80, 140)
 
 
 def base_folder() -> Path:
     if getattr(sys, "frozen", False):
         return Path(sys.executable).resolve().parent
     return Path.cwd()
+
+
+def window_size() -> tuple[int, int]:
+    """As big as the page wants, and never bigger than the screen.
+
+    The wanted height is taller than the work area of a 1366x768 laptop, which
+    is still a common machine. Asking for it there would put the bottom of the
+    window -- where the Convert button is -- underneath the taskbar, so the
+    screen wins whenever it is smaller.
+    """
+    wanted_width, wanted_height = WANTED_SIZE
+
+    try:
+        screen = webview.screens[0]
+        available = (screen.width - SCREEN_MARGIN[0], screen.height - SCREEN_MARGIN[1])
+    except Exception:
+        # No screen to ask -- take what the page wants and let the window
+        # manager sort it out rather than failing to open at all.
+        return WANTED_SIZE
+
+    return (
+        max(MIN_SIZE[0], min(wanted_width, available[0])),
+        max(MIN_SIZE[1], min(wanted_height, available[1])),
+    )
 
 
 def ui_folder() -> Path:
@@ -61,13 +101,15 @@ def main(argv: list[str] | None = None) -> int:
         print(f"The UI is missing: {index}")
         return 1
 
+    width, height = window_size()
+
     api = Api(base_folder())
     window = webview.create_window(
         WINDOW_TITLE,
         str(index),
         js_api=api,
-        width=880,
-        height=720,
+        width=width,
+        height=height,
         min_size=MIN_SIZE,
     )
     # The Api needs the window to open a folder dialog and to call into the

@@ -250,6 +250,19 @@ three state colours are used nowhere else. Two light values were chosen, looked
 correct, and failed there at 4.35:1 and 2.92:1. They were darkened. That is what
 the test is for.
 
+## The window's size
+
+`main.py` decides it, and the numbers are measured rather than picked. The
+controls come to 684px with the log at its 6rem minimum; the log is one line
+per file and the only place a warning is explained, so it gets 240px rather
+than its minimum. That plus the window chrome is where 960 comes from, and the
+width is the widest row (786px) with slack for a long path.
+
+**The screen wins when it is smaller.** The wanted height is taller than the
+work area of a 1366x768 laptop, and asking for it there would put the bottom of
+the window -- where Convert is -- behind the taskbar. `window_size()` caps it,
+and `tests/test_window.py` checks the arithmetic on a range of screens.
+
 ## What this file does not cover
 
 The window frame, the titlebar and the menu bar are the OS's, and the app does
