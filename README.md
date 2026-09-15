@@ -8,6 +8,10 @@ A CLI that converts a folder of images to 1-bit monochrome BMP files.
   it: a 20x16 image asked for 10x10 is resized to 10x8 and centred in a 10x10
   white box.
 - Press enter at the size question to convert without resizing.
+- Resizing never enlarges, so an image already inside the box is centred
+  on white at that size and a warning says so -- per image as it happens,
+  and again at the end, where a run that shrank nothing at all is called
+  out as such.
 - Two ways to reach black and white, and the app asks which: **dither**,
   which scatters dots to keep shading and suits photographs, or **hard cut**,
   one threshold with flat areas left flat, which suits line art, icons, logos

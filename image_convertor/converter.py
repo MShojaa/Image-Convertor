@@ -123,15 +123,41 @@ def to_monochrome(image: Image.Image, threshold: int | None) -> Image.Image:
     return grey.point(lambda value: 255 if value >= threshold else 0, mode="1")
 
 
+@dataclass(frozen=True)
+class Converted:
+    """What happened to one image.
+
+    `size` is the file that was written and `original` the file that was read;
+    when a box was asked for they differ by the white padding as well as by
+    any shrinking, which is why `shrunk` is recorded rather than inferred.
+    """
+
+    size: Size
+    original: Size
+    shrunk: bool
+
+    @property
+    def too_small_to_shrink(self) -> bool:
+        """Asked to fit a box it already fitted inside.
+
+        Worth saying out loud: the file comes out at the size asked for, so
+        nothing looks wrong, but it is padding rather than detail -- usually a
+        sign the box is bigger than the source material.
+        """
+        return not self.shrunk and self.size != self.original
+
+
 def convert_image(
     source: Path,
     destination: Path,
     box: Size | None = None,
     threshold: int | None = None,
-) -> Size:
-    """Convert one file and write it as a 1-bit BMP. Returns the size written."""
+) -> Converted:
+    """Convert one file and write it as a 1-bit BMP."""
     with Image.open(source) as opened:
         image = flatten_to_white(opened)
+
+    original = Size(*image.size)
 
     if box is not None:
         image = fit_into_box(image, box)
@@ -140,7 +166,10 @@ def convert_image(
 
     destination.parent.mkdir(parents=True, exist_ok=True)
     image.save(destination, format="BMP")
-    return Size(*image.size)
+
+    written = Size(*image.size)
+    shrunk = written.width < original.width or written.height < original.height
+    return Converted(size=written, original=original, shrunk=shrunk)
 
 
 def find_images(folder: Path) -> list[Path]:

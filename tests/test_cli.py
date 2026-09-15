@@ -215,3 +215,81 @@ def test_the_input_flag_overrides_the_input_folder(images, tmp_path, monkeypatch
 
     assert cli.main(["--input", str(elsewhere), "--size", "", "--mode", "dither"]) == 0
     assert output_files(images) == ["only.bmp"]
+
+
+# --- the "could not shrink" warning --------------------------------------
+
+def make_input(base, sizes):
+    """An input folder holding one black image per name -> size given."""
+    folder = base / cli.INPUT_NAME
+    folder.mkdir(exist_ok=True)
+    for name, size in sizes.items():
+        Image.new("RGB", size, (0, 0, 0)).save(folder / name)
+    return base
+
+
+def convert_at(base, size, monkeypatch):
+    monkeypatch.setattr(cli, "base_folder", lambda: base)
+    code = cli.main(["--size", size, "--mode", "dither"])
+    assert code == 0
+    return code
+
+
+def test_an_image_already_inside_the_box_warns(tmp_path, monkeypatch, capsys):
+    make_input(tmp_path, {"small.png": (4, 4)})
+    convert_at(tmp_path, "10x10", monkeypatch)
+
+    printed = capsys.readouterr().out
+    assert "WARNING" in printed
+    assert "already 4x4" in printed
+    assert "not shrunk" in printed
+
+
+def test_nothing_shrinkable_says_so_at_the_end(tmp_path, monkeypatch, capsys):
+    make_input(tmp_path, {"a.png": (4, 4), "b.png": (8, 2)})
+    convert_at(tmp_path, "10x10", monkeypatch)
+
+    assert "WARNING: nothing was shrunk" in capsys.readouterr().out
+
+
+def test_some_shrinkable_names_the_ones_that_were_not(tmp_path, monkeypatch, capsys):
+    make_input(tmp_path, {"big.png": (40, 40), "small.png": (4, 4)})
+    convert_at(tmp_path, "10x10", monkeypatch)
+
+    printed = capsys.readouterr().out
+    assert "WARNING: 1 of 2 image(s) could not be shrunk" in printed
+    assert "small.png" in printed
+    assert "nothing was shrunk" not in printed
+
+
+def test_a_long_list_of_warnings_is_cut_short(tmp_path, monkeypatch, capsys):
+    sizes = {f"small{index}.png": (4, 4) for index in range(8)}
+    sizes["big.png"] = (40, 40)
+    make_input(tmp_path, sizes)
+    convert_at(tmp_path, "10x10", monkeypatch)
+
+    summary = capsys.readouterr().out.rsplit("WARNING:", 1)[1]
+    assert "8 of 9 image(s)" in summary
+    assert "and 3 more" in summary
+
+
+def test_shrinking_everything_warns_about_nothing(tmp_path, monkeypatch, capsys):
+    make_input(tmp_path, {"a.png": (40, 40), "b.png": (20, 16)})
+    convert_at(tmp_path, "10x10", monkeypatch)
+
+    assert "WARNING" not in capsys.readouterr().out
+
+
+def test_an_exact_fit_warns_about_nothing(tmp_path, monkeypatch, capsys):
+    make_input(tmp_path, {"a.png": (10, 10)})
+    convert_at(tmp_path, "10x10", monkeypatch)
+
+    assert "WARNING" not in capsys.readouterr().out
+
+
+def test_no_resizing_warns_about_nothing(tmp_path, monkeypatch, capsys):
+    """With no box there is no shrinking to fail at."""
+    make_input(tmp_path, {"a.png": (4, 4), "b.png": (40, 40)})
+    convert_at(tmp_path, "", monkeypatch)
+
+    assert "WARNING" not in capsys.readouterr().out

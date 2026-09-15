@@ -7,6 +7,7 @@ from PIL import Image
 
 from image_convertor.converter import (
     DEFAULT_THRESHOLD,
+    Converted,
     Size,
     convert_image,
     find_images,
@@ -164,7 +165,7 @@ def test_convert_image_writes_a_1bit_bmp(tmp_path):
 
     written = convert_image(source, destination, Size(10, 10), DEFAULT_THRESHOLD)
 
-    assert written == Size(10, 10)
+    assert written.size == Size(10, 10)
     with Image.open(destination) as result:
         assert result.format == "BMP"
         assert result.mode == "1"
@@ -177,7 +178,9 @@ def test_convert_image_without_a_box_keeps_the_size(tmp_path):
 
     written = convert_image(source, tmp_path / "wide.bmp", None, None)
 
-    assert written == Size(20, 16)
+    assert written.size == Size(20, 16)
+    assert not written.shrunk
+    assert not written.too_small_to_shrink  # no box asked for, nothing to warn about
 
 
 def test_convert_image_creates_the_output_folder(tmp_path):
@@ -199,3 +202,58 @@ def test_find_images_picks_up_images_and_skips_the_rest(tmp_path):
     found = [path.name for path in find_images(tmp_path)]
 
     assert found == ["a.JPG", "b.png", "c.bmp"]  # sorted, folders left alone
+
+
+# --- was it actually shrunk? ---------------------------------------------
+
+def convert(source_size, box, tmp_path):
+    path = tmp_path / "in.png"
+    Image.new("RGB", source_size, BLACK).save(path)
+    return convert_image(path, tmp_path / "out.bmp", box)
+
+
+@pytest.mark.parametrize(
+    "source, box",
+    [
+        ((20, 16), (10, 10)),   # shrunk and padded
+        ((20, 10), (10, 5)),    # shrunk, same ratio, no padding
+        ((20, 4), (10, 10)),    # shrunk on the wide side only
+        ((4, 20), (10, 10)),    # shrunk on the tall side only
+    ],
+)
+def test_a_larger_image_reports_a_shrink(source, box, tmp_path):
+    result = convert(source, Size(*box), tmp_path)
+
+    assert result.shrunk
+    assert not result.too_small_to_shrink
+
+
+@pytest.mark.parametrize(
+    "source, box",
+    [
+        ((4, 4), (10, 10)),     # smaller both ways
+        ((4, 10), (10, 10)),    # already exactly as tall as the box
+        ((10, 4), (10, 10)),    # already exactly as wide as the box
+    ],
+)
+def test_an_image_already_inside_the_box_is_reported(source, box, tmp_path):
+    result = convert(source, Size(*box), tmp_path)
+
+    assert not result.shrunk
+    assert result.too_small_to_shrink
+    assert result.size == Size(*box)
+    assert result.original == Size(*source)
+
+
+def test_an_exact_fit_is_not_a_failure_to_shrink(tmp_path):
+    """Nothing was shrunk, but nothing was padded either -- no warning."""
+    result = convert((10, 10), Size(10, 10), tmp_path)
+
+    assert not result.shrunk
+    assert not result.too_small_to_shrink
+
+
+def test_the_result_is_a_plain_value(tmp_path):
+    assert convert((4, 4), Size(10, 10), tmp_path) == Converted(
+        size=Size(10, 10), original=Size(4, 4), shrunk=False
+    )

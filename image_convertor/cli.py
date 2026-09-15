@@ -159,20 +159,61 @@ def run(args: argparse.Namespace) -> int:
     print()
 
     failures = 0
+    not_shrunk = []
     for image_path in images:
         destination = output_folder / (image_path.stem + ".bmp")
         try:
-            written = convert_image(image_path, destination, box, threshold)
+            result = convert_image(image_path, destination, box, threshold)
         except Exception as error:  # a bad file should not stop the batch
             failures += 1
             print(f"  FAILED  {image_path.name}: {error}")
             continue
-        print(f"  {image_path.name} -> {destination.name} ({written})")
+
+        print(f"  {image_path.name} -> {destination.name} ({result.size})")
+
+        # Say when an image was already inside the box. The file is the size
+        # that was asked for either way, so nothing looks wrong on disk -- but
+        # the extra pixels are white padding, not detail, and if it happens to
+        # every image the box is simply bigger than the source material.
+        if result.too_small_to_shrink:
+            not_shrunk.append(image_path.name)
+            print(
+                f"    WARNING  already {result.original}, smaller than "
+                f"{result.size} -- centred on white, not shrunk"
+            )
 
     print()
     converted = len(images) - failures
     print(f"Done: {converted} converted, {failures} failed.")
+    report_not_shrunk(not_shrunk, converted, box)
     return 1 if failures else 0
+
+
+def report_not_shrunk(names: list[str], converted: int, box: Size | None) -> None:
+    """The warning again at the end, where it will actually be read.
+
+    A per-image warning scrolls off the top of a long run; this is the line
+    still on screen when it finishes, and it says how bad it was -- all of
+    them, or a handful worth naming.
+    """
+    if not names:
+        return
+
+    print()
+    if converted == len(names):
+        print(
+            f"WARNING: nothing was shrunk -- every image was already smaller "
+            f"than {box}, so they were centred on white at that size."
+        )
+        return
+
+    listed = ", ".join(names[:5])
+    if len(names) > 5:
+        listed += f" and {len(names) - 5} more"
+    print(
+        f"WARNING: {len(names)} of {converted} image(s) could not be shrunk "
+        f"(already smaller than {box}): {listed}"
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:
