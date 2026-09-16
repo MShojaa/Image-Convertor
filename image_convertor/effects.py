@@ -66,6 +66,12 @@ DEFAULT_TOLERANCE = 12
 # staircase off a keyed edge without eating into the picture.
 SOFT_EDGE_RADIUS = 1.0
 
+# Whether an effect leaves the transparent parts of an image alone. On by
+# default: noise appearing in an area the user called transparent is a
+# surprise, and a blur that softens a cut-out's silhouette is usually not what
+# was being asked for. Turn it off to treat the whole rectangle as picture.
+KEEP_CLEAR = True
+
 
 @dataclass(frozen=True)
 class Effect:
@@ -83,8 +89,27 @@ class Effect:
         raise NotImplementedError
 
     def described(self) -> str:
-        """How this effect would be written on the command line."""
-        return self.name
+        """How this effect would be written on the command line.
+
+        Built from the same table that parses one, so the two cannot drift.
+        A setting left at its default is written as nothing, and trailing
+        nothings are dropped -- which is what makes the common case read as
+        "blur" rather than "blur:1:yes".
+        """
+        import dataclasses
+
+        defaults = {field.name: field.default for field in dataclasses.fields(type(self))}
+        written = []
+        for setting in SETTINGS.get(type(self), ()):
+            value = getattr(self, setting.label)
+            written.append(
+                "" if value == defaults.get(setting.label) else setting.write(value)
+            )
+
+        while written and written[-1] == "":
+            written.pop()
+
+        return ":".join([self.name, *written]) if written else self.name
 
 
 @dataclass(frozen=True)
@@ -170,11 +195,6 @@ class Transparent(Effect):
         image.putalpha(ImageChops.darker(image.getchannel("A"), keyed))
         return image
 
-    def described(self) -> str:
-        return "{}:#{:02x}{:02x}{:02x}:{}:{}:{}".format(
-            self.name, *self.colour, self.match, self.tolerance,
-            "yes" if self.soft else "no",
-        )
 
 
 @dataclass(frozen=True)
@@ -192,6 +212,7 @@ class Blur(Effect):
     """
 
     radius: float = DEFAULT_BLUR_RADIUS
+    keep_clear: bool = KEEP_CLEAR
 
     name: ClassVar[str] = "blur"
     order: ClassVar[int] = 10
@@ -205,8 +226,6 @@ class Blur(Effect):
             return image
         return image.filter(ImageFilter.GaussianBlur(self.radius))
 
-    def described(self) -> str:
-        return f"{self.name}:{self.radius:g}"
 
 
 @dataclass(frozen=True)
@@ -238,6 +257,7 @@ class Noise(Effect):
 
     amount: int = DEFAULT_NOISE_AMOUNT
     seed: int = DEFAULT_NOISE_SEED
+    keep_clear: bool = KEEP_CLEAR
 
     name: ClassVar[str] = "noise"
     order: ClassVar[int] = 20
@@ -299,10 +319,6 @@ class Noise(Effect):
         """
         return ImageChops.add(band, noise, scale=1.0, offset=-self.amount)
 
-    def described(self) -> str:
-        if self.seed == DEFAULT_NOISE_SEED:
-            return f"{self.name}:{self.amount}"
-        return f"{self.name}:{self.amount}:{self.seed}"
 
 
 @dataclass(frozen=True)
@@ -326,6 +342,7 @@ class Grayscale(Effect):
     """
 
     tint: tuple[int, int, int] = NEUTRAL_TINT
+    keep_clear: bool = KEEP_CLEAR
 
     name: ClassVar[str] = "grayscale"
     order: ClassVar[int] = 50
@@ -353,10 +370,6 @@ class Grayscale(Effect):
             return Image.merge("LA", (toned, alpha))
         return Image.merge("RGBA", (*toned.split(), alpha))
 
-    def described(self) -> str:
-        if tuple(self.tint) == NEUTRAL_TINT:
-            return self.name
-        return "{}:#{:02x}{:02x}{:02x}".format(self.name, *self.tint)
 
 
 @dataclass(frozen=True)
@@ -378,6 +391,7 @@ class Monochrome(Effect):
     """
 
     threshold: int | None = None
+    keep_clear: bool = KEEP_CLEAR
 
     name: ClassVar[str] = "monochrome"
     order: ClassVar[int] = 90
@@ -408,17 +422,49 @@ class Monochrome(Effect):
         # notices it is still black and white.
         return Image.merge("LA", (black_and_white.convert("L"), alpha))
 
-    def described(self) -> str:
-        if self.threshold is None:
-            return self.name
-        return f"{self.name}:{self.threshold}"
 
 
 def apply_effects(image: Image.Image, effects: tuple[Effect, ...]) -> Image.Image:
-    """Run the effects over the image, in their own order, one of each."""
+    """Run the effects over the image, in their own order, one of each.
+
+    An effect that asked to keep the clear areas clear gets its result put
+    back through `restore_clear`, rather than every effect having to think
+    about alpha itself. Doing it here also means a new effect gets the
+    behaviour by declaring the field, and nothing else.
+    """
     for effect in order_effects(effects):
+        before = image
         image = effect.apply(image)
+        if getattr(effect, "keep_clear", False):
+            image = restore_clear(before, image)
     return image
+
+
+def restore_clear(before: Image.Image, after: Image.Image) -> Image.Image:
+    """Put back the transparency the effect was told not to touch.
+
+    The alpha channel comes back exactly as it was -- so a blur softens the
+    picture without softening the silhouette -- and the colour underneath is
+    taken from whichever version the pixel was more visible in.
+
+    That last part falls out of using the alpha as the mask, and it is the
+    right answer rather than a convenient one: a pixel that is half
+    transparent gets half the effect, so an antialiased edge does not end up
+    with a hard line of untouched pixels along it.
+    """
+    if before.mode not in ("RGBA", "LA", "La"):
+        return after
+
+    alpha = before.getchannel("A")
+
+    # Grey in, grey out: an effect that took the colour away should not have
+    # it handed back by this.
+    if after.mode in ("1", "L", "LA", "La"):
+        kept = Image.composite(after.convert("L"), before.convert("L"), alpha)
+        return Image.merge("LA", (kept, alpha))
+
+    kept = Image.composite(after.convert("RGB"), before.convert("RGB"), alpha)
+    return Image.merge("RGBA", (*kept.split(), alpha))
 
 
 def order_effects(effects: tuple[Effect, ...]) -> tuple[Effect, ...]:
@@ -537,6 +583,28 @@ def choice_of(allowed: tuple[str, ...]):
     return parse
 
 
+def write_colour(value) -> str:
+    return "#{:02x}{:02x}{:02x}".format(*tuple(value)[:3])
+
+
+def write_flag(value) -> str:
+    return "yes" if value else "no"
+
+
+def write_number(value) -> str:
+    # %g so a radius of 2.0 is "2": describe() is meant to be re-typable, and
+    # nobody types the trailing zero.
+    return "" if value is None else (f"{value:g}" if isinstance(value, float) else str(value))
+
+
+WRITERS = {
+    "colour": write_colour,
+    "flag": write_flag,
+    "choice": str,
+    "number": write_number,
+}
+
+
 @dataclass(frozen=True)
 class Setting:
     """One thing an effect can be told, and what kind of thing it is.
@@ -552,6 +620,17 @@ class Setting:
     complaint: str
     kind: str = "number"
     options: tuple[str, ...] = ()
+    #: What the window puts beside the control. The field name, unless that
+    #: reads badly on its own -- "keep_clear" is a Python name, "keep clear"
+    #: is a label.
+    title: str = ""
+
+    def write(self, value) -> str:
+        """The value as it would be typed."""
+        return WRITERS[self.kind](value)
+
+    def shown(self) -> str:
+        return self.title or self.label
 
 
 # What each effect takes after its name, in order. One table rather than a
@@ -578,19 +657,43 @@ SETTINGS: dict[type[Effect], tuple[Setting, ...]] = {
             kind="flag",
         ),
     ),
-    Blur: (Setting("radius", float, "A blur radius is a number of pixels"),),
+    Blur: (
+        Setting("radius", float, "A blur radius is a number of pixels"),
+        Setting(
+            "keep_clear", parse_flag,
+            "Keeping the clear areas clear is yes or no",
+            kind="flag", title="keep clear",
+        ),
+    ),
     Grayscale: (
         Setting(
             "tint", parse_colour,
             "A tint is a colour name like gray or a hex like #8a5a2b",
             kind="colour",
         ),
+        Setting(
+            "keep_clear", parse_flag,
+            "Keeping the clear areas clear is yes or no",
+            kind="flag", title="keep clear",
+        ),
     ),
     Noise: (
         Setting("amount", int, "A noise amount is a whole number of grey levels"),
         Setting("seed", int, "A noise seed is a whole number"),
+        Setting(
+            "keep_clear", parse_flag,
+            "Keeping the clear areas clear is yes or no",
+            kind="flag", title="keep clear",
+        ),
     ),
-    Monochrome: (Setting("threshold", int, "A monochrome threshold is a whole number"),),
+    Monochrome: (
+        Setting("threshold", int, "A monochrome threshold is a whole number"),
+        Setting(
+            "keep_clear", parse_flag,
+            "Keeping the clear areas clear is yes or no",
+            kind="flag", title="keep clear",
+        ),
+    ),
 }
 
 

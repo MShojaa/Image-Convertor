@@ -99,6 +99,7 @@ class Api:
                     "settings": [
                         {
                             "name": setting.label,
+                            "title": setting.shown(),
                             "kind": setting.kind,
                             "options": list(setting.options),
                             "default": _default_for(kind, setting.label),

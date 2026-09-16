@@ -164,7 +164,9 @@ function effectRow(effect, values, step) {
   effect.settings.forEach((setting, index) => {
     const label = document.createElement("label");
     label.className = "setting-label";
-    label.textContent = setting.name;
+    /* The title, not the name: the name is the field the effect declares and
+       is sometimes a Python identifier rather than something to read. */
+    label.textContent = setting.title || setting.name;
 
     const control = settingControl(effect, setting, values && values[index]);
     label.htmlFor = control.id;

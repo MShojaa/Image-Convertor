@@ -407,6 +407,9 @@ body {
 .setting-flag {
   width: 16px;
   height: 16px;
+  /* Browsers give a checkbox a few pixels of margin of its own, which put it
+     four pixels right of the boxes above and below it in the same column. */
+  margin: 0;
   accent-color: var(--accent);
   cursor: pointer;
   justify-self: start;

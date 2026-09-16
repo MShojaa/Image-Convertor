@@ -27,6 +27,7 @@ from image_convertor.effects import (
     describe,
     order_effects,
     parse_effect,
+    restore_clear,
 )
 
 
@@ -397,9 +398,9 @@ def test_an_omitted_setting_takes_its_default():
 
 def test_too_many_settings_says_what_the_effect_takes():
     with pytest.raises(ValueError) as raised:
-        parse_effect("noise:1:2:3")
+        parse_effect("noise:1:2:3:4")
 
-    assert "amount, seed" in str(raised.value)
+    assert "amount, seed, keep_clear" in str(raised.value)
 
 
 def test_the_default_seed_is_left_out_of_the_description():
@@ -705,3 +706,105 @@ def test_a_settings_label_matches_a_real_field():
         fields = {field.name for field in dataclasses.fields(kind)}
         for setting in settings:
             assert setting.label in fields, f"{kind.name} has no {setting.label}"
+
+
+# --- leaving the transparent area alone ----------------------------------
+
+def cutout(size=(16, 8)):
+    """A hard-edged shape on a clear background: left clear, right opaque."""
+    image = Image.new("RGBA", size, (0, 0, 0, 0))
+    for x in range(size[0] // 2, size[0]):
+        for y in range(size[1]):
+            image.putpixel((x, y), (200, 60, 60, 255))
+    return image
+
+
+def test_keeping_the_clear_areas_clear_is_the_default():
+    """Noise appearing where the user said transparent is a surprise."""
+    for kind in (Blur, Noise, Grayscale, Monochrome):
+        assert kind().keep_clear is True
+
+
+def test_the_transparent_effect_has_no_such_flag():
+    """It is the one that makes things clear; it cannot be told to leave them."""
+    assert not hasattr(Transparent(), "keep_clear")
+
+
+def test_a_blur_does_not_soften_the_silhouette_by_default():
+    blurred = Blur(3).apply(cutout())
+    kept = apply_effects(cutout(), (Blur(3),))
+
+    assert any(0 < v < 255 for v in blurred.getchannel("A").tobytes())
+    assert set(kept.getchannel("A").tobytes()) == {0, 255}, "the cut-out edge moved"
+
+
+def test_turning_it_off_lets_the_blur_reach_the_alpha():
+    """For when the whole rectangle really is the picture."""
+    softened = apply_effects(cutout(), (Blur(3, keep_clear=False),))
+
+    assert any(0 < v < 255 for v in softened.getchannel("A").tobytes())
+
+
+def test_noise_does_not_reach_into_the_clear_area():
+    noised = apply_effects(cutout(), (Noise(60, seed=1),))
+    left_half = noised.crop((0, 0, 8, 8))
+
+    assert set(left_half.getchannel("A").tobytes()) == {0}
+    assert set(left_half.convert("RGB").tobytes()) == {0}, "colour changed under the clear"
+
+
+def test_the_visible_part_is_still_affected():
+    noised = apply_effects(cutout(), (Noise(60, seed=1),))
+    right_half = noised.crop((8, 0, 16, 8)).convert("RGB")
+
+    assert len(set(right_half.tobytes())) > 1
+
+
+def test_grayscale_leaves_the_clear_area_alone():
+    toned = apply_effects(cutout(), (Grayscale((138, 90, 43)),))
+
+    assert set(toned.crop((0, 0, 8, 8)).getchannel("A").tobytes()) == {0}
+
+
+def test_monochrome_keeps_the_alpha_it_was_given():
+    result = apply_effects(cutout(), (Monochrome(128),))
+
+    assert result.mode == "LA"
+    assert set(result.crop((0, 0, 8, 8)).getchannel("A").tobytes()) == {0}
+
+
+def test_an_opaque_image_is_unaffected_by_the_flag():
+    """Nothing to protect, so it must not change what happens."""
+    opaque = Image.new("RGB", (16, 8), (200, 60, 60))
+
+    protected = apply_effects(opaque, (Noise(40, seed=2),))
+    unprotected = apply_effects(opaque, (Noise(40, seed=2, keep_clear=False),))
+
+    assert levels(protected) == levels(unprotected)
+
+
+def test_a_half_transparent_pixel_gets_half_the_effect():
+    """It falls out of using the alpha as the mask, and it is the right answer:
+    an antialiased edge does not end up with a hard line of untouched pixels."""
+    # Mid grey, not black: a duotone maps black to black, so a black pixel
+    # would show nothing whether the effect reached it or not.
+    half = Image.new("RGBA", (4, 4), (128, 128, 128, 128))
+
+    result = apply_effects(half, (Grayscale((255, 0, 0)),))
+    red, green, blue = result.convert("RGB").getpixel((0, 0))
+
+    assert red > blue, "the effect did not reach a half-visible pixel"
+    assert red < 255, "a half-visible pixel got the whole effect"
+    assert result.getchannel("A").getpixel((0, 0)) == 128
+
+
+def test_restore_clear_does_nothing_to_an_image_without_alpha():
+    before = Image.new("RGB", (4, 4), (10, 20, 30))
+    after = Image.new("RGB", (4, 4), (40, 50, 60))
+
+    assert restore_clear(before, after) is after
+
+
+def test_the_flag_reads_back_as_it_would_be_typed():
+    for effect in (Blur(2, keep_clear=False), Noise(40, 7, keep_clear=False)):
+        assert parse_effect(effect.described()) == effect

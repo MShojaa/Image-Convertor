@@ -81,6 +81,14 @@ to come first.
     monochrome  black and white; with a threshold it is a hard cut, without
                 one it dithers
 
+Every other effect has a **keep clear** option, on by default: it leaves the
+transparent parts of an image alone. Noise appearing in an area you called
+transparent is a surprise, and a blur that softens a cut-out's silhouette is
+usually not what was being asked for -- the picture blurs, the outline stays.
+Turn it off to treat the whole rectangle as picture. A half-transparent pixel
+gets half the effect, so an antialiased edge does not come out with a hard line
+of untouched pixels along it.
+
 `transparent` runs first, before everything else: keying after a blur would
 be keying the blur's own soft edges. A pixel that was already transparent stays
 transparent, so running it twice, or after something else that cleared part of
