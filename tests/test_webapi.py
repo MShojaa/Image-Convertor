@@ -119,7 +119,7 @@ def test_describe_app_gives_each_effect_its_settings_and_defaults(app):
     described = app.describe_app()
     noise = next(e for e in described["effects"] if e["name"] == "noise")
 
-    assert [s["name"] for s in noise["settings"]] == ["amount", "seed"]
+    assert [s["name"] for s in noise["settings"]] == ["amount", "seed", "keep_clear"]
     assert noise["settings"][0]["default"] == 25
 
 
