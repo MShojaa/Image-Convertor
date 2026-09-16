@@ -13,9 +13,11 @@ from PIL import Image
 from image_convertor.effects import (
     DEFAULT_NOISE_AMOUNT,
     DEFAULT_THRESHOLD,
+    NEUTRAL_TINT,
     REGISTRY,
     Blur,
     Effect,
+    Grayscale,
     Monochrome,
     Noise,
     apply_effects,
@@ -402,3 +404,122 @@ def test_the_default_seed_is_left_out_of_the_description():
     assert Noise(40).described() == "noise:40"
     assert Noise(40, 7).described() == "noise:40:7"
     assert parse_effect(Noise(40, 7).described()) == Noise(40, 7)
+
+
+# --- grayscale -----------------------------------------------------------
+
+def test_grayscale_takes_the_colour_out():
+    result = Grayscale().apply(Image.new("RGB", (4, 4), (200, 60, 60)))
+
+    assert result.mode == "L"
+
+
+def test_the_default_tint_is_plain_grayscale():
+    """Mid grey maps black to black, white to white and grey to itself, so the
+    default needs no special case to mean "no tint"."""
+    assert Grayscale().tint == NEUTRAL_TINT
+    assert Grayscale().described() == "grayscale"
+
+
+def test_the_default_tint_matches_a_straight_conversion():
+    colourful = Image.new("RGB", (8, 8), (200, 60, 90))
+
+    assert levels(Grayscale().apply(colourful)) == levels(colourful.convert("L"))
+
+
+def test_a_tint_puts_one_colour_back():
+    result = Grayscale((138, 90, 43)).apply(Image.new("RGB", (4, 4), (128, 128, 128)))
+
+    assert result.mode == "RGB"
+    red, green, blue = result.getpixel((0, 0))
+    assert red > green > blue, "a warm tint should come out warm"
+
+
+def test_a_tint_keeps_the_ends_of_the_range():
+    """It is a duotone -- black stays black and white stays white -- not a
+    wash, which would drag the highlights down with everything else."""
+    ramp = Image.new("L", (3, 1))
+    ramp.putpixel((0, 0), 0)
+    ramp.putpixel((1, 0), 128)
+    ramp.putpixel((2, 0), 255)
+
+    toned = Grayscale((138, 90, 43)).apply(ramp.convert("RGB"))
+
+    assert toned.getpixel((0, 0)) == (0, 0, 0)
+    assert toned.getpixel((2, 0)) == (255, 255, 255)
+
+
+def test_a_tint_keeps_the_shading():
+    """The point of a duotone: every level of the original is still distinct."""
+    ramp = Image.new("L", (32, 1))
+    for x in range(32):
+        ramp.putpixel((x, 0), x * 8)
+
+    toned = Grayscale((138, 90, 43)).apply(ramp.convert("RGB"))
+
+    assert len(set(levels(toned))) > 20
+
+
+def test_grayscale_keeps_alpha():
+    clear = Image.new("RGBA", (4, 4), (200, 60, 60, 77))
+
+    plain = Grayscale().apply(clear)
+    tinted = Grayscale((138, 90, 43)).apply(clear)
+
+    assert plain.mode == "LA"
+    assert tinted.mode == "RGBA"
+    for result in (plain, tinted):
+        assert set(result.getchannel("A").tobytes()) == {77}
+
+
+def test_grayscale_runs_after_noise_and_before_monochrome():
+    assert Noise.order < Grayscale.order < Monochrome.order
+
+    assert order_effects((Monochrome(128), Grayscale(), Blur(1), Noise(10))) == (
+        Blur(1),
+        Noise(10),
+        Grayscale(),
+        Monochrome(128),
+    )
+
+
+@pytest.mark.parametrize(
+    "text, expected",
+    [
+        ("grayscale", NEUTRAL_TINT),
+        ("grayscale:gray", NEUTRAL_TINT),
+        ("grayscale:#8a5a2b", (138, 90, 43)),
+        ("grayscale:red", (255, 0, 0)),
+    ],
+)
+def test_a_tint_can_be_named_or_written_in_hex(text, expected):
+    assert parse_effect(text).tint == expected
+
+
+def test_a_tint_that_is_not_a_colour_says_so():
+    with pytest.raises(ValueError) as raised:
+        parse_effect("grayscale:ultraviolet")
+
+    assert "colour" in str(raised.value)
+
+
+def test_a_tint_reads_back_as_hex():
+    """describe() has to be re-typable, and a name is not always available."""
+    effect = Grayscale((138, 90, 43))
+
+    assert parse_effect(effect.described()) == effect
+
+
+def test_a_tint_out_of_range_is_refused():
+    for bad in ((-1, 0, 0), (0, 256, 0)):
+        with pytest.raises(ValueError):
+            Grayscale(bad)
+
+
+def test_grayscale_into_monochrome_still_gives_two_levels():
+    toned = apply_effects(
+        Image.new("RGB", (16, 16), (200, 60, 60)),
+        (Grayscale((138, 90, 43)), Monochrome(128)),
+    )
+
+    assert toned.mode == "1"

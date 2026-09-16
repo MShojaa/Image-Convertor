@@ -25,7 +25,7 @@ import random
 from dataclasses import dataclass
 from typing import ClassVar
 
-from PIL import Image, ImageChops, ImageFilter
+from PIL import Image, ImageChops, ImageColor, ImageFilter, ImageOps
 
 # Mid grey: the hard cut has to split somewhere, and halfway is the only
 # choice that does not lean light or dark before seeing the image.
@@ -46,6 +46,11 @@ DEFAULT_NOISE_AMOUNT = 25
 # twice should give the same files. Pass a different seed to get different
 # noise -- that is what the number is for.
 DEFAULT_NOISE_SEED = 0
+
+# Mid grey. Tinting with it is the identity -- black stays black, white stays
+# white, and mid grey maps to itself -- so the default tint is plain grayscale
+# and costs nothing to say.
+NEUTRAL_TINT = (128, 128, 128)
 
 
 @dataclass(frozen=True)
@@ -197,6 +202,60 @@ class Noise(Effect):
 
 
 @dataclass(frozen=True)
+class Grayscale(Effect):
+    """Take the colour out, optionally putting one colour back.
+
+    The tint is a duotone, not a wash: the image's brightness is mapped onto a
+    ramp that runs black -> tint -> white, so a reddish tint gives something
+    sepia-like that keeps all of its shading. Multiplying by the colour instead
+    would drag the highlights down with everything else and come out muddy.
+
+    **The default tint is mid grey, and that is exactly plain grayscale.** The
+    ramp black -> #808080 -> white is the identity, so the default needs no
+    special case to mean "no tint" -- though it gets one anyway, to hand back a
+    grey image rather than three identical channels.
+
+    It runs after noise and before monochrome. Before monochrome because
+    monochrome throws away everything this does; after noise because noise is
+    monochromatic and tinting it with the picture is what keeps the grain part
+    of the image rather than sat on top of it.
+    """
+
+    tint: tuple[int, int, int] = NEUTRAL_TINT
+
+    name: ClassVar[str] = "grayscale"
+    order: ClassVar[int] = 50
+
+    def __post_init__(self) -> None:
+        if len(self.tint) != 3 or not all(0 <= part <= 255 for part in self.tint):
+            raise ValueError(f"A tint is three values, 0 to 255 -- got {self.tint!r}")
+
+    def apply(self, image: Image.Image) -> Image.Image:
+        alpha = image.getchannel("A") if image.mode in ("RGBA", "LA", "La") else None
+        grey = image.convert("L")
+
+        if tuple(self.tint) == NEUTRAL_TINT:
+            # The ramp would be the identity; skip it and stay in "L", which is
+            # a third of the size and what monochrome wants next anyway.
+            toned = grey
+        else:
+            toned = ImageOps.colorize(
+                grey, black=(0, 0, 0), white=(255, 255, 255), mid=tuple(self.tint)
+            )
+
+        if alpha is None:
+            return toned
+        if toned.mode == "L":
+            return Image.merge("LA", (toned, alpha))
+        return Image.merge("RGBA", (*toned.split(), alpha))
+
+    def described(self) -> str:
+        if tuple(self.tint) == NEUTRAL_TINT:
+            return self.name
+        return "{}:#{:02x}{:02x}{:02x}".format(self.name, *self.tint)
+
+
+@dataclass(frozen=True)
 class Monochrome(Effect):
     """Down to one bit per pixel.
 
@@ -278,6 +337,7 @@ def order_effects(effects: tuple[Effect, ...]) -> tuple[Effect, ...]:
 REGISTRY: dict[str, type[Effect]] = {
     Blur.name: Blur,
     Noise.name: Noise,
+    Grayscale.name: Grayscale,
     Monochrome.name: Monochrome,
 }
 
@@ -329,8 +389,28 @@ def parse_effect(text: str) -> Effect:
 # What each effect takes after its name, in order: the field, how to read it,
 # and the sentence to say when it will not read. One table rather than a
 # branch per effect, so adding an effect is adding a row.
+def parse_colour(text: str) -> tuple[int, int, int]:
+    """A colour from a name or a hex value.
+
+    Pillow's own parser, so "gray", "sepia"-ish hex, "#ccc" and "rgb(1,2,3)"
+    all work without a table here of colours somebody would have to maintain.
+    Any alpha in the value is dropped: this is a colour to tint with, not
+    something to see through.
+    """
+    try:
+        parsed = ImageColor.getrgb(text.strip())
+    except ValueError:
+        raise ValueError(
+            f"A colour is a name like gray or a hex value like #8a5a2b"
+        ) from None
+    return tuple(parsed[:3])
+
+
 SETTINGS: dict[type[Effect], tuple[tuple[str, object, str], ...]] = {
     Blur: (("radius", float, "A blur radius is a number of pixels"),),
+    Grayscale: (
+        ("tint", parse_colour, "A tint is a colour name like gray or a hex like #8a5a2b"),
+    ),
     Noise: (
         ("amount", int, "A noise amount is a whole number of grey levels"),
         ("seed", int, "A noise seed is a whole number"),
