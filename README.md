@@ -16,7 +16,8 @@ images.
 - Resizing never enlarges, so an image already inside the box is centred at that
   size and a warning says so -- per image as it happens, and again at the end,
   where a run that shrank nothing at all is called out as such.
-- Effects are chosen, not compulsory: **blur**, **noise** and **monochrome**.
+- Effects are chosen, not compulsory: **blur**, **noise**, **grayscale** and
+  **monochrome**.
 
 The icon is drawn by `assets/make_icon.py` and committed; run it only if the
 design changes.
@@ -62,6 +63,12 @@ to come first.
                 the same way twice. The same noise goes on every colour
                 channel, so a colour image stays the colour it was --
                 only lighter and darker, pixel by pixel
+    grayscale   takes the colour out. Give it a tint -- a name like sepia
+                or a hex value like #8a5a2b -- and it puts one colour back
+                as a duotone: the brightness is mapped onto a ramp running
+                black -> tint -> white, so the shading survives. The
+                default tint is mid grey, which is that ramp doing
+                nothing, i.e. plain grayscale
     monochrome  black and white; with a threshold it is a hard cut, without
                 one it dithers
 
