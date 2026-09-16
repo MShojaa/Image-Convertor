@@ -5,14 +5,17 @@ images.
 
 - Output is written in the same format as the input by default -- a png in gives
   a png out -- or in one format for everything.
-- Transparent areas become white.
+- **Transparency is kept.** A clear PNG stays clear through resizing and
+  every effect, and is only filled with white when the chosen format cannot
+  hold transparency at all.
 - Resizing only shrinks and always keeps the aspect ratio. A box with a
-  different ratio is filled with white around the image rather than stretching
-  it: a 20x16 image asked for 10x10 is resized to 10x8 and centred in a 10x10
-  white box.
-- Resizing never enlarges, so an image already inside the box is centred on
-  white at that size and a warning says so -- per image as it happens, and again
-  at the end, where a run that shrank nothing at all is called out as such.
+  different ratio is padded around the image rather than stretching it: a 20x16
+  image asked for 10x10 is resized to 10x8 and centred in a 10x10 box. The
+  padding matches the image -- white for an opaque one, transparent for one that
+  came in transparent.
+- Resizing never enlarges, so an image already inside the box is centred at that
+  size and a warning says so -- per image as it happens, and again at the end,
+  where a run that shrank nothing at all is called out as such.
 - Effects are chosen, not compulsory: **blur**, **noise** and **monochrome**.
 
 The icon is drawn by `assets/make_icon.py` and committed; run it only if the
@@ -68,6 +71,14 @@ is a hand-rolled dither, and a coarse one. Blur into a dither mostly cancels
 out, because dithering is already scattering dots to fake the grey levels the
 blur just made.
 
+### Formats and transparency
+
+**png, tiff and webp** keep it. **bmp, gif and jpg** cannot, so clear areas are
+filled with white on the way out -- which has to be done deliberately: bmp and
+gif do not refuse an image with transparency, they write it without the alpha
+and keep whatever colour was hiding underneath, which in a PNG is usually black.
+A logo with a clear background would come out as a black rectangle.
+
 ### Formats and one bit
 
 `monochrome` makes an image 1-bit, and not every format can hold that. **png,
@@ -77,6 +88,10 @@ lossless in that case so the dots survive. **jpg is refused**: it is lossy, so a
 dither comes back with ringing around every dot, and Pillow writes it anyway as
 8-bit grey rather than complaining. The app stops instead and says to use png,
 bmp or tiff.
+
+An image that also has transparency comes out of `monochrome` as 8-bit grey plus
+alpha rather than 1-bit -- one bit has no room for a third state. It is the same
+two levels either way, and jpg refuses it just the same.
 
 Only that pairing is refused. A colour jpg converts to a jpg as you would
 expect, and in a mixed folder the one refused file fails on its own while the

@@ -208,6 +208,10 @@ class Monochrome(Effect):
 
     It runs last, always. Everything else works on grey levels this step
     throws away.
+
+    An image carrying transparency comes back as "LA" rather than "1", because
+    one bit has no room for a third state. It is the same two levels either
+    way.
     """
 
     threshold: int | None = None
@@ -222,10 +226,24 @@ class Monochrome(Effect):
             )
 
     def apply(self, image: Image.Image) -> Image.Image:
+        alpha = image.getchannel("A") if image.mode in ("RGBA", "LA", "La") else None
+
         grey = image.convert("L")
         if self.threshold is None:
-            return grey.convert("1")
-        return grey.point(lambda value: 255 if value >= self.threshold else 0, mode="1")
+            black_and_white = grey.convert("1")
+        else:
+            black_and_white = grey.point(
+                lambda value: 255 if value >= self.threshold else 0, mode="1"
+            )
+
+        if alpha is None:
+            return black_and_white
+
+        # One bit has no room for a third state, so an image that has to keep
+        # its transparency comes back as "LA": the same two levels, in a mode
+        # that has somewhere to put the alpha. `formats.two_levels` is what
+        # notices it is still black and white.
+        return Image.merge("LA", (black_and_white.convert("L"), alpha))
 
     def described(self) -> str:
         if self.threshold is None:

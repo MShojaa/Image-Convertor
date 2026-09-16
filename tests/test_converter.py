@@ -162,7 +162,8 @@ def test_output_is_one_bit():
 
 # --- the whole thing, on real files --------------------------------------
 
-def test_convert_image_writes_a_1bit_image(tmp_path):
+def test_convert_image_keeps_transparency_through_the_whole_pipeline(tmp_path):
+    """A clear PNG used to come out white. It comes out clear."""
     source = tmp_path / "logo.png"
     Image.new("RGBA", (20, 16), (0, 0, 0, 0)).save(source)
     destination = tmp_path / "out" / "logo.png"
@@ -174,8 +175,20 @@ def test_convert_image_writes_a_1bit_image(tmp_path):
     assert written.size == Size(10, 10)
     with Image.open(destination) as result:
         assert result.format == "PNG"  # the source's own format, by default
+        # "LA", not "1": one bit has no room for a third state.
+        assert result.mode == "LA"
+        assert set(result.getchannel("A").tobytes()) == {0}
+
+
+def test_an_opaque_image_still_comes_out_one_bit(tmp_path):
+    """Nothing to keep, so nothing is carried: the old shape is unchanged."""
+    source = tmp_path / "photo.png"
+    Image.new("RGB", (20, 16), (120, 120, 120)).save(source)
+
+    convert_image(source, tmp_path / "out.png", None, (Monochrome(DEFAULT_THRESHOLD),))
+
+    with Image.open(tmp_path / "out.png") as result:
         assert result.mode == "1"
-        assert rows(result) == ["." * 10] * 10  # transparent all the way through
 
 
 def test_convert_image_without_a_box_keeps_the_size(tmp_path):
@@ -263,3 +276,92 @@ def test_the_result_is_a_plain_value(tmp_path):
     assert convert((4, 4), Size(10, 10), tmp_path) == Converted(
         size=Size(10, 10), original=Size(4, 4), shrunk=False
     )
+
+
+# --- transparency through the pipeline -----------------------------------
+
+def test_normalise_keeps_alpha_rather_than_flattening_it():
+    """The change this whole version is about: an effect can now see a
+    transparent area, because there is still one when it runs."""
+    from image_convertor.converter import normalise
+
+    assert normalise(Image.new("RGBA", (4, 4), (0, 0, 0, 0))).mode == "RGBA"
+    assert normalise(Image.new("LA", (4, 4), (10, 0))).mode == "RGBA"
+    assert normalise(Image.new("RGB", (4, 4))).mode == "RGB"
+
+
+def test_normalise_keeps_palette_transparency():
+    image = Image.new("P", (4, 4), 0)
+    image.putpalette([0, 0, 0] * 256)
+    image.info["transparency"] = 0
+
+    from image_convertor.converter import normalise
+
+    assert normalise(image).mode == "RGBA"
+
+
+def test_normalise_leaves_a_palette_without_transparency_opaque():
+    image = Image.new("P", (4, 4), 0)
+    image.putpalette([10, 20, 30] * 256)
+
+    from image_convertor.converter import normalise
+
+    assert normalise(image).mode == "RGB"
+
+
+def test_a_transparent_image_is_padded_with_transparency():
+    """Padding a logo that asked to keep its clear background with a white
+    frame is the one thing it did not ask for."""
+    clear = Image.new("RGBA", (20, 16), (0, 0, 0, 255))
+    fitted = fit_into_box(clear, Size(10, 10))
+
+    assert fitted.mode == "RGBA"
+    assert fitted.getchannel("A").getpixel((0, 0)) == 0      # the padding
+    assert fitted.getchannel("A").getpixel((5, 5)) == 255    # the image
+
+
+def test_an_opaque_image_is_still_padded_with_white():
+    fitted = fit_into_box(Image.new("RGB", (20, 16), (0, 0, 0)), Size(10, 10))
+
+    assert fitted.mode == "RGB"
+    assert fitted.getpixel((0, 0)) == (255, 255, 255)
+
+
+def test_flatten_still_puts_transparency_on_white_when_asked():
+    """It is not gone -- it moved to the end, where the format decides."""
+    flattened = flatten_to_white(Image.new("RGBA", (4, 4), (0, 0, 0, 0)))
+
+    assert flattened.mode == "RGB"
+    assert flattened.getpixel((0, 0)) == (255, 255, 255)
+
+
+def test_flatten_takes_another_colour():
+    flattened = flatten_to_white(Image.new("RGBA", (4, 4), (0, 0, 0, 0)), (255, 0, 0))
+
+    assert flattened.getpixel((0, 0)) == (255, 0, 0)
+
+
+def test_has_alpha_knows_the_modes_apart():
+    from image_convertor.converter import has_alpha
+
+    assert has_alpha(Image.new("RGBA", (2, 2)))
+    assert has_alpha(Image.new("LA", (2, 2)))
+    assert not has_alpha(Image.new("RGB", (2, 2)))
+    assert not has_alpha(Image.new("L", (2, 2)))
+
+
+def test_blur_keeps_the_alpha_channel():
+    """Blurring the alpha too is what a blur means -- the edge softens with
+    the picture rather than staying a hard cut-out."""
+    from image_convertor.effects import Blur
+
+    clear = Image.new("RGBA", (16, 16), (0, 0, 0, 0))
+    for x in range(8, 16):
+        for y in range(16):
+            clear.putpixel((x, y), (200, 30, 30, 255))
+
+    blurred = Blur(3).apply(clear)
+    alpha = set(blurred.getchannel("A").tobytes())
+
+    assert blurred.mode == "RGBA"
+    assert any(0 < value < 255 for value in alpha), "the alpha edge stayed hard"

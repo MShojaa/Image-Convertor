@@ -37,29 +37,40 @@ class Format:
     pillow: str
     keeps_one_bit: bool
     lossy: bool
+    #: Whether transparency survives being written in this format. Measured,
+    #: not read off a spec sheet: BMP and GIF both *accept* an RGBA image and
+    #: hand back one without alpha, which is the silent case this flag exists
+    #: to catch.
+    keeps_alpha: bool = False
     note: str = ""
 
 
-PNG = Format("png", ".png", "PNG", keeps_one_bit=True, lossy=False)
-BMP = Format("bmp", ".bmp", "BMP", keeps_one_bit=True, lossy=False)
-TIFF = Format("tiff", ".tiff", "TIFF", keeps_one_bit=True, lossy=False)
+PNG = Format("png", ".png", "PNG", keeps_one_bit=True, lossy=False, keeps_alpha=True)
+TIFF = Format("tiff", ".tiff", "TIFF", keeps_one_bit=True, lossy=False, keeps_alpha=True)
+BMP = Format(
+    "bmp", ".bmp", "BMP",
+    keeps_one_bit=True,
+    lossy=False,
+    note="no transparency: clear areas are filled with white",
+)
 GIF = Format(
     "gif", ".gif", "GIF",
     keeps_one_bit=False,
     lossy=False,
-    note="stored as grey; two levels in, two levels out",
+    note="two levels survive; no transparency, clear areas are filled white",
 )
 WEBP = Format(
     "webp", ".webp", "WEBP",
     keeps_one_bit=False,
     lossy=False,
-    note="written lossless when the image is 1-bit, so the dots survive",
+    keeps_alpha=True,
+    note="written lossless when the image has two levels, so the dots survive",
 )
 JPEG = Format(
     "jpg", ".jpg", "JPEG",
     keeps_one_bit=False,
     lossy=True,
-    note="cannot hold one bit -- see why below",
+    note="no transparency, and cannot hold one bit -- see why below",
 )
 
 REGISTRY: dict[str, Format] = {
@@ -110,18 +121,41 @@ def for_source(source: Path) -> Format:
     return BY_SUFFIX.get(source.suffix.lower(), FALLBACK)
 
 
-def refuse_reason(fmt: Format, mode: str) -> str | None:
+def two_levels(image: Image.Image) -> bool:
+    """Whether the image is pure black and pure white, and nothing else.
+
+    Asked of the pixels rather than of the mode, because monochrome no longer
+    always produces mode "1": an image with transparency comes out of it as
+    "LA", since one bit has no room for a third state. Both are the thing a
+    lossy format ruins.
+
+    **Both extremes have to be present.** "Two levels or fewer" was the first
+    version of this and it was wrong: a flat colour has one level, so an
+    ordinary red square counted as a dither and JPEG was refused for it. What
+    makes a dither unsurvivable is the hard edge between 0 and 255 next to each
+    other, and an image without both simply does not have one.
+
+    `getcolors` returns None past its limit, which makes this cheap on a
+    photograph -- it stops counting almost immediately.
+    """
+    counted = image.convert("L").getcolors(3)
+    if counted is None:
+        return False
+    return {value for _, value in counted} == {0, 255}
+
+
+def refuse_reason(fmt: Format, image: Image.Image) -> str | None:
     """Why this image must not be written in this format, or None if it may.
 
-    One rule today, and it earns the whole module. Everything else Pillow
-    handles or degrades harmlessly.
+    One rule, and it earns the whole module. Everything else Pillow either
+    handles or degrades in a way `save` below puts right.
     """
-    if mode == "1" and fmt.lossy:
+    if fmt.lossy and two_levels(image):
         return (
-            f"{fmt.name} is lossy and cannot hold a 1-bit image: the dots of a "
-            f"dither come back with ringing round every one of them. Pillow "
-            f"writes it anyway, as 8-bit grey, which is why this stops here. "
-            f"Use --format png, bmp or tiff, or drop the monochrome effect."
+            f"{fmt.name} is lossy and cannot hold a two-level image: the dots "
+            f"of a dither come back with ringing round every one of them. "
+            f"Pillow writes it anyway, as 8-bit grey, which is why this stops "
+            f"here. Use png, bmp or tiff, or drop the monochrome effect."
         )
     return None
 
@@ -129,19 +163,35 @@ def refuse_reason(fmt: Format, mode: str) -> str | None:
 def save(image: Image.Image, destination: Path, fmt: Format) -> None:
     """Write the image, in the one way that format wants it.
 
-    Refuses first -- see `refuse_reason` -- and then does whatever that format
-    needs that Pillow will not do by itself.
+    Refuses first -- see `refuse_reason` -- then puts right the two things
+    Pillow does quietly and wrongly: dropping an alpha channel a format cannot
+    hold, and dropping one it can.
     """
-    reason = refuse_reason(fmt, image.mode)
+    reason = refuse_reason(fmt, image)
     if reason is not None:
         raise ValueError(reason)
 
+    from .converter import flatten_to_white, has_alpha
+
+    if has_alpha(image) and not fmt.keeps_alpha:
+        # BMP and GIF do not refuse an RGBA image -- they write one without
+        # the alpha, keeping whatever colour was hiding under the transparent
+        # pixels, which in a PNG is usually black. So a logo with a clear
+        # background would come out as a black rectangle. Compositing onto
+        # white is what "no transparency" has to mean.
+        image = flatten_to_white(image)
+
     options: dict[str, object] = {}
-    if fmt is WEBP and image.mode == "1":
-        # WebP is lossy by default, and lossy plus two levels is the same
-        # problem JPEG is refused for. Lossless costs nothing on an image with
-        # two colours in it.
-        options["lossless"] = True
+
+    if fmt is WEBP:
+        if image.mode == "LA":
+            # WebP writes an LA image as RGB and throws the alpha away
+            # without a word. RGBA it keeps.
+            image = image.convert("RGBA")
+        if two_levels(image):
+            # WebP is lossy by default, and lossy plus two levels is the same
+            # problem JPEG is refused for. Lossless costs nothing here.
+            options["lossless"] = True
 
     destination.parent.mkdir(parents=True, exist_ok=True)
     image.save(destination, format=fmt.pillow, **options)

@@ -67,8 +67,34 @@ def parse_size(text: str) -> Size | None:
     return Size(width, height)
 
 
-def flatten_to_white(image: Image.Image) -> Image.Image:
-    """Drop transparency onto a white background.
+def normalise(image: Image.Image) -> Image.Image:
+    """Bring an opened file down to one of two modes: RGB, or RGBA.
+
+    Everything downstream -- the fit, the effects, the save -- then has two
+    cases to think about rather than Pillow's dozen. Palette images with a
+    transparency index and greyscale-plus-alpha both become RGBA; everything
+    else becomes RGB.
+
+    **Alpha is kept.** It used to be composited onto white here, before
+    anything else ran, which made "do not touch the transparent area"
+    impossible to ask for: by the time an effect saw the image there was no
+    transparent area left. Flattening now happens at the end, and only when
+    the chosen format cannot hold alpha.
+    """
+    if image.mode == "P":
+        return image.convert("RGBA" if "transparency" in image.info else "RGB")
+    if image.mode in ("RGBA", "LA", "PA", "La"):
+        return image.convert("RGBA")
+    return image.convert("RGB")
+
+
+def has_alpha(image: Image.Image) -> bool:
+    """Whether this image carries transparency at all."""
+    return image.mode in ("RGBA", "LA", "PA", "La") or "transparency" in image.info
+
+
+def flatten_to_white(image: Image.Image, colour: tuple[int, int, int] = WHITE):
+    """Drop transparency onto a solid background, white by default.
 
     Straight to RGB would keep the colour of fully transparent pixels, which in
     a PNG is usually black -- so a logo with a clear background comes out as a
@@ -77,10 +103,14 @@ def flatten_to_white(image: Image.Image) -> Image.Image:
     if image.mode == "P" and "transparency" in image.info:
         image = image.convert("RGBA")
 
-    if image.mode in ("RGBA", "LA"):
+    if image.mode in ("RGBA", "LA", "La"):
+        was_grey = image.mode in ("LA", "La")
         image = image.convert("RGBA")
-        background = Image.new("RGBA", image.size, WHITE + (255,))
-        return Image.alpha_composite(background, image).convert("RGB")
+        background = Image.new("RGBA", image.size, tuple(colour) + (255,))
+        flattened = Image.alpha_composite(background, image)
+        # A grey image stays grey: flattening is about the alpha channel, not
+        # an excuse to triple the file size.
+        return flattened.convert("L") if was_grey and colour == WHITE else flattened.convert("RGB")
 
     return image.convert("RGB")
 
@@ -93,6 +123,16 @@ def fit_into_box(image: Image.Image, box: Size) -> Image.Image:
     rather than a stretched image. Images already smaller than the box are not
     blown up -- they are just centred.
     """
+    # Padding matches what the image already is: a transparent image is padded
+    # with transparency, not with a white frame around a logo that was asked to
+    # keep its background clear.
+    if has_alpha(image):
+        pad = (255, 255, 255, 0)
+        mode = "RGBA"
+    else:
+        pad = WHITE
+        mode = "RGB"
+
     scale = min(box.width / image.width, box.height / image.height, 1.0)
 
     # At least one pixel each way: a very wide image shrunk hard would
@@ -106,7 +146,7 @@ def fit_into_box(image: Image.Image, box: Size) -> Image.Image:
     if (width, height) == (box.width, box.height):
         return image
 
-    canvas = Image.new("RGB", (box.width, box.height), WHITE)
+    canvas = Image.new(mode, (box.width, box.height), pad)
     canvas.paste(image, ((box.width - width) // 2, (box.height - height) // 2))
     return canvas
 
@@ -148,6 +188,9 @@ def convert_image(
     `monochrome` is what makes an image 1-bit. With no format given it is
     taken from the source, which is what "the same as the input" means.
 
+    Transparency survives all of it and is flattened onto white at the last
+    step, by `formats.save`, and only when the format cannot hold it.
+
     The order is flatten, fit, then the effects -- and it is that way round for
     a reason. Flattening first means an effect never has to think about an
     alpha channel. Fitting before the effects rather than after means a blur
@@ -159,7 +202,7 @@ def convert_image(
         fmt = formats.for_source(source)
 
     with Image.open(source) as opened:
-        image = flatten_to_white(opened)
+        image = normalise(opened)
 
     original = Size(*image.size)
 
