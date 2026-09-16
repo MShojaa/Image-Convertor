@@ -782,3 +782,65 @@ def test_a_cancelled_dialog_still_says_which_field(app):
 
     assert wait_for(lambda: folder_events(app))
     assert folder_events(app)[0]["which"] == "output"
+
+
+# --- what the page is told about each setting ----------------------------
+
+def settings_of(app, effect_name):
+    described = app.describe_app()
+    effect = next(e for e in described["effects"] if e["name"] == effect_name)
+    return {setting["name"]: setting for setting in effect["settings"]}
+
+
+def test_each_setting_says_what_kind_of_control_it_is(app):
+    """So the page can draw a dropdown or a checkbox rather than a text box
+    for everything and a user left guessing that "soft" wants the word "yes"."""
+    settings = settings_of(app, "transparent")
+
+    assert settings["colour"]["kind"] == "colour"
+    assert settings["match"]["kind"] == "choice"
+    assert settings["tolerance"]["kind"] == "number"
+    assert settings["soft"]["kind"] == "flag"
+
+
+def test_a_choice_setting_carries_its_options(app):
+    assert settings_of(app, "transparent")["match"]["options"] == ["tolerance", "exact"]
+
+
+def test_a_setting_that_is_not_a_choice_carries_none(app):
+    assert settings_of(app, "blur")["radius"]["options"] == []
+
+
+def test_a_colour_default_crosses_as_the_hex_a_user_would_type(app):
+    """It is a tuple in Python, and a tuple is not something the page can put
+    in a text box."""
+    assert settings_of(app, "transparent")["colour"]["default"] == "#ffffff"
+    assert settings_of(app, "grayscale")["tint"]["default"] == "#808080"
+
+
+def test_a_flag_default_crosses_as_the_word(app):
+    assert settings_of(app, "transparent")["soft"]["default"] == "no"
+
+
+def test_the_transparent_effect_is_offered_first(app):
+    """It runs first, and the list is in the order things run."""
+    described = app.describe_app()
+
+    assert described["effects"][0]["name"] == "transparent"
+
+
+def test_a_conversion_can_key_a_colour_out(app, tmp_path):
+    folder = tmp_path / "input"
+    folder.mkdir()
+    image = Image.new("RGB", (8, 4), (255, 255, 255))
+    for x in range(4, 8):
+        for y in range(4):
+            image.putpixel((x, y), (200, 30, 30))
+    image.save(folder / "logo.png")
+
+    run(app, effects=["transparent"])
+
+    with Image.open(app._base / "output" / "logo.png") as result:
+        assert result.mode == "RGBA"
+        assert result.getchannel("A").getpixel((0, 0)) == 0
+        assert result.getchannel("A").getpixel((7, 0)) == 255

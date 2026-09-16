@@ -13,13 +13,16 @@ from PIL import Image
 from image_convertor.effects import (
     DEFAULT_NOISE_AMOUNT,
     DEFAULT_THRESHOLD,
+    DEFAULT_KEY_COLOUR,
     NEUTRAL_TINT,
     REGISTRY,
+    SETTINGS,
     Blur,
     Effect,
     Grayscale,
     Monochrome,
     Noise,
+    Transparent,
     apply_effects,
     describe,
     order_effects,
@@ -523,3 +526,182 @@ def test_grayscale_into_monochrome_still_gives_two_levels():
     )
 
     assert toned.mode == "1"
+
+
+# --- transparent ---------------------------------------------------------
+
+def half_white(size=(8, 4)):
+    """Left half white, right half red."""
+    image = Image.new("RGB", size, (255, 255, 255))
+    for x in range(size[0] // 2, size[0]):
+        for y in range(size[1]):
+            image.putpixel((x, y), (200, 30, 30))
+    return image
+
+
+def alpha_of(image):
+    return list(image.getchannel("A").tobytes())
+
+
+def test_transparent_keys_out_the_colour_and_keeps_the_rest():
+    result = Transparent().apply(half_white())
+
+    assert result.mode == "RGBA"
+    row = alpha_of(result)[:8]
+    assert row == [0, 0, 0, 0, 255, 255, 255, 255]
+
+
+def test_white_is_the_default_colour():
+    """A scanned page, a logo on a card and an exported diagram all have it."""
+    assert Transparent().colour == DEFAULT_KEY_COLOUR == (255, 255, 255)
+
+
+def test_another_colour_can_be_keyed():
+    result = Transparent(colour=(200, 30, 30)).apply(half_white())
+
+    row = alpha_of(result)[:8]
+    assert row == [255, 255, 255, 255, 0, 0, 0, 0]
+
+
+def test_exact_leaves_a_nearly_white_pixel_alone():
+    """A jpg's white background wanders a few levels; exact is for flat PNGs."""
+    near = Image.new("RGB", (4, 1), (252, 254, 253))
+
+    assert set(alpha_of(Transparent(match="exact").apply(near))) == {255}
+
+
+def test_a_tolerance_catches_a_nearly_white_pixel():
+    near = Image.new("RGB", (4, 1), (252, 254, 253))
+
+    assert set(alpha_of(Transparent(match="tolerance").apply(near))) == {0}
+
+
+def test_exact_is_a_tolerance_of_zero():
+    """Kept as its own named choice rather than asking people to work it out."""
+    near = Image.new("RGB", (4, 1), (252, 254, 253))
+
+    assert alpha_of(Transparent(match="exact").apply(near)) == alpha_of(
+        Transparent(match="tolerance", tolerance=0).apply(near)
+    )
+
+
+def test_the_tolerance_is_the_worst_channel_not_the_average():
+    """"Within 12 of white" has to mean all three channels are; an average
+    would let a strong blue through on the strength of its red."""
+    blueish = Image.new("RGB", (4, 1), (255, 255, 200))
+
+    assert set(alpha_of(Transparent(tolerance=12).apply(blueish))) == {255}
+
+
+def test_a_wider_tolerance_catches_more():
+    grey = Image.new("RGB", (4, 1), (200, 200, 200))
+
+    assert set(alpha_of(Transparent(tolerance=12).apply(grey))) == {255}
+    assert set(alpha_of(Transparent(tolerance=60).apply(grey))) == {0}
+
+
+def test_soft_edges_give_partial_alpha_at_the_boundary():
+    """A hard key on an antialiased edge leaves a staircase."""
+    hard = alpha_of(Transparent(soft=False).apply(half_white((16, 4))))
+    soft = alpha_of(Transparent(soft=True).apply(half_white((16, 4))))
+
+    assert set(hard) == {0, 255}
+    assert any(0 < value < 255 for value in soft), "the edge stayed hard"
+
+
+def test_soft_edges_work_with_an_exact_match_too():
+    """It feathers the mask, not the match, so it is available to both."""
+    soft = alpha_of(Transparent(match="exact", soft=True).apply(half_white((16, 4))))
+
+    assert any(0 < value < 255 for value in soft)
+
+
+def test_an_already_transparent_pixel_stays_transparent():
+    """The mask is combined with the alpha it arrived with, not swapped for it,
+    so running this twice does not undo the first one."""
+    clear = Image.new("RGBA", (4, 4), (200, 30, 30, 0))
+
+    assert set(alpha_of(Transparent().apply(clear))) == {0}
+
+
+def test_transparent_runs_before_everything_else():
+    """Keying after a blur would be keying the blur's own soft edges."""
+    assert Transparent.order < min(
+        kind.order for kind in REGISTRY.values() if kind is not Transparent
+    )
+
+
+def test_transparent_reads_back_as_it_would_be_typed():
+    effect = Transparent(colour=(0, 0, 0), match="exact", tolerance=30, soft=True)
+
+    assert parse_effect(effect.described()) == effect
+
+
+def test_an_omitted_setting_takes_its_default():
+    assert parse_effect("transparent::exact::yes") == Transparent(
+        match="exact", soft=True
+    )
+
+
+@pytest.mark.parametrize("word", ["yes", "true", "on", "1"])
+def test_a_flag_can_be_said_any_of_the_usual_ways(word):
+    assert parse_effect(f"transparent::::{word}").soft is True
+
+
+@pytest.mark.parametrize("word", ["no", "false", "off", "0"])
+def test_a_flag_can_be_denied_any_of_the_usual_ways(word):
+    assert parse_effect(f"transparent::::{word}").soft is False
+
+
+def test_a_flag_that_is_not_yes_or_no_says_so():
+    with pytest.raises(ValueError) as raised:
+        parse_effect("transparent::::maybe")
+
+    assert "yes or no" in str(raised.value)
+
+
+def test_an_unknown_match_names_the_ones_there_are():
+    with pytest.raises(ValueError) as raised:
+        parse_effect("transparent:white:fuzzy")
+
+    assert "tolerance" in str(raised.value) and "exact" in str(raised.value)
+
+
+def test_a_tolerance_out_of_range_is_refused():
+    for bad in (-1, 256):
+        with pytest.raises(ValueError):
+            Transparent(tolerance=bad)
+
+
+# --- what the settings say about themselves ------------------------------
+
+def test_every_setting_declares_a_kind_the_window_can_draw():
+    drawable = {"number", "colour", "choice", "flag"}
+
+    for settings in SETTINGS.values():
+        for setting in settings:
+            assert setting.kind in drawable, f"{setting.label} is a {setting.kind}"
+
+
+def test_a_choice_setting_lists_its_options():
+    for settings in SETTINGS.values():
+        for setting in settings:
+            if setting.kind == "choice":
+                assert setting.options, f"{setting.label} offers nothing to choose"
+            else:
+                assert not setting.options
+
+
+def test_every_effect_has_a_settings_row():
+    """Parsing looks the effect up here; a missing row is a KeyError at use."""
+    for kind in REGISTRY.values():
+        assert kind in SETTINGS
+
+
+def test_a_settings_label_matches_a_real_field():
+    import dataclasses
+
+    for kind, settings in SETTINGS.items():
+        fields = {field.name for field in dataclasses.fields(kind)}
+        for setting in settings:
+            assert setting.label in fields, f"{kind.name} has no {setting.label}"

@@ -402,6 +402,26 @@ body {
   transition: color var(--fast) ease-out, background var(--fast) ease-out;
 }
 
+/* A checkbox in the settings column, lined up with the boxes either side
+   of it rather than floating at the left of its cell. */
+.setting-flag {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+  cursor: pointer;
+  justify-self: start;
+}
+
+select.setting-input {
+  cursor: pointer;
+}
+
+.setting-input:disabled {
+  color: var(--text-faint);
+  background: var(--surface);
+  cursor: default;
+}
+
 .effect[data-on="false"] .setting-label { color: var(--text-faint); }
 .effect[data-on="false"] .setting-input {
   color: var(--text-faint);

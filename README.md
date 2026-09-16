@@ -16,8 +16,8 @@ images.
 - Resizing never enlarges, so an image already inside the box is centred at that
   size and a warning says so -- per image as it happens, and again at the end,
   where a run that shrank nothing at all is called out as such.
-- Effects are chosen, not compulsory: **blur**, **noise**, **grayscale** and
-  **monochrome**.
+- Effects are chosen, not compulsory: **transparent**, **blur**, **noise**,
+  **grayscale** and **monochrome**.
 
 The icon is drawn by `assets/make_icon.py` and committed; run it only if the
 design changes.
@@ -56,6 +56,15 @@ They run in this order whichever you pick, because most other orders are wrong
 -- monochrome leaves an image with two levels, so anything working on grey has
 to come first.
 
+    transparent make one colour see-through, white unless told otherwise.
+                Two ways to decide what counts as that colour: a
+                tolerance, which takes anything within a few levels of it
+                and is the one for photographs and jpgs where the white
+                is never quite white; or an exact match, which takes only
+                that colour and suits flat-colour PNGs and logos. Soft
+                edges are available to both -- they feather the edge of
+                what was cut rather than cutting more, which is what
+                takes the staircase off an antialiased logo
     blur        gaussian blur, default 1 pixel; fractional radii are the
                 useful ones on a small image
     noise       uniform noise, default 25 levels either way; the seed
@@ -71,6 +80,11 @@ to come first.
                 nothing, i.e. plain grayscale
     monochrome  black and white; with a threshold it is a hard cut, without
                 one it dithers
+
+`transparent` runs first, before everything else: keying after a blur would
+be keying the blur's own soft edges. A pixel that was already transparent stays
+transparent, so running it twice, or after something else that cleared part of
+the image, does not undo the first one.
 
 **Blur into a hard cut** is the pairing worth knowing about: it is how a
 threshold gets a soft edge rather than a jagged one. **Noise into a hard cut**

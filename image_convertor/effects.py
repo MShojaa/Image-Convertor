@@ -52,6 +52,20 @@ DEFAULT_NOISE_SEED = 0
 # and costs nothing to say.
 NEUTRAL_TINT = (128, 128, 128)
 
+# White, which is what a scanned page, a logo on a white card and an exported
+# diagram all have as a background -- so it is what "make this transparent" is
+# asking about nearly every time.
+DEFAULT_KEY_COLOUR = (255, 255, 255)
+
+# How far from that colour still counts, per channel. Tight: a jpg's "white"
+# background wanders a few levels, and this is meant to catch that and not a
+# pale grey that is part of the picture.
+DEFAULT_TOLERANCE = 12
+
+# How far the softened edge reaches, in pixels. One is enough to take the
+# staircase off a keyed edge without eating into the picture.
+SOFT_EDGE_RADIUS = 1.0
+
 
 @dataclass(frozen=True)
 class Effect:
@@ -71,6 +85,96 @@ class Effect:
     def described(self) -> str:
         """How this effect would be written on the command line."""
         return self.name
+
+
+@dataclass(frozen=True)
+class Transparent(Effect):
+    """Make one colour see-through. White, unless told otherwise.
+
+    Two ways to decide what counts as the colour, because neither is right for
+    both kinds of image:
+
+    **tolerance** takes anything within `tolerance` of it on every channel.
+    This is the one to use on a photograph or a jpg, where the "white"
+    background is never quite 255 -- compression moves it a few levels either
+    way and an exact match finds almost none of it.
+
+    **exact** takes only that colour and nothing else. Flat-colour PNGs, logos
+    and exported diagrams key perfectly this way, and it cannot eat a pale part
+    of the picture the way a tolerance can.
+
+    `soft` is available to both, and does the same thing for both: it feathers
+    the edge of the mask rather than widening the match. A hard key on an
+    antialiased logo leaves a staircase, because the half-white pixels around
+    the letters are either in or out; a one-pixel feather gives them partial
+    alpha and the edge reads smooth.
+
+    **Already-transparent pixels stay transparent.** The mask is combined with
+    whatever alpha the image arrived with rather than replacing it, so running
+    this twice, or after something else that made part of the image clear, does
+    not undo the first one.
+
+    It runs first, before everything. Keying after a blur would be keying the
+    blur's own soft edges, and the point of doing it first is that every effect
+    after it can be told to leave the transparent area alone.
+    """
+
+    colour: tuple[int, int, int] = DEFAULT_KEY_COLOUR
+    match: str = "tolerance"
+    tolerance: int = DEFAULT_TOLERANCE
+    soft: bool = False
+
+    name: ClassVar[str] = "transparent"
+    order: ClassVar[int] = 5
+
+    MATCHES: ClassVar[tuple[str, ...]] = ("tolerance", "exact")
+
+    def __post_init__(self) -> None:
+        if len(self.colour) != 3 or not all(0 <= part <= 255 for part in self.colour):
+            raise ValueError(f"A colour is three values, 0 to 255 -- got {self.colour!r}")
+        if self.match not in self.MATCHES:
+            allowed = " or ".join(self.MATCHES)
+            raise ValueError(f"Matching is {allowed} -- got {self.match!r}")
+        if not 0 <= self.tolerance <= 255:
+            raise ValueError(
+                f"A tolerance is a distance in levels, 0 to 255 -- got {self.tolerance}"
+            )
+
+    def apply(self, image: Image.Image) -> Image.Image:
+        if image.mode != "RGBA":
+            image = image.convert("RGBA")
+
+        # How far each pixel is from the key colour, per channel, taking the
+        # worst of the three. The max rather than an average, because "within
+        # 12 of white" has to mean all three channels are within 12 -- an
+        # average would let a strong blue through on the strength of its red.
+        rgb = image.convert("RGB")
+        solid = Image.new("RGB", image.size, tuple(self.colour))
+        red, green, blue = ImageChops.difference(rgb, solid).split()
+        distance = ImageChops.lighter(ImageChops.lighter(red, green), blue)
+
+        # Exact is a tolerance of zero. Keeping it as its own named choice
+        # rather than asking people to work that out is the whole reason the
+        # setting exists.
+        reach = 0 if self.match == "exact" else self.tolerance
+        keyed = distance.point(lambda value: 0 if value <= reach else 255, mode="L")
+
+        if self.soft:
+            # Feather the mask, not the match: a hard key on an antialiased
+            # edge leaves a staircase, and widening the match instead would
+            # eat further into the picture rather than smoothing what it cut.
+            keyed = keyed.filter(ImageFilter.GaussianBlur(SOFT_EDGE_RADIUS))
+
+        # Darker, not replace: a pixel that was already transparent stays
+        # transparent whatever this mask says about its colour.
+        image.putalpha(ImageChops.darker(image.getchannel("A"), keyed))
+        return image
+
+    def described(self) -> str:
+        return "{}:#{:02x}{:02x}{:02x}:{}:{}:{}".format(
+            self.name, *self.colour, self.match, self.tolerance,
+            "yes" if self.soft else "no",
+        )
 
 
 @dataclass(frozen=True)
@@ -335,6 +439,7 @@ def order_effects(effects: tuple[Effect, ...]) -> tuple[Effect, ...]:
 # Every effect the app knows, by the name the user types. Adding one here is
 # all it takes to make it parseable -- there is no second list to update.
 REGISTRY: dict[str, type[Effect]] = {
+    Transparent.name: Transparent,
     Blur.name: Blur,
     Noise.name: Noise,
     Grayscale.name: Grayscale,
@@ -369,19 +474,19 @@ def parse_effect(text: str) -> Effect:
 
     settings = SETTINGS[kind]
     if len(pieces) > len(settings):
-        expected = ", ".join(label for label, _, _ in settings) or "nothing"
+        expected = ", ".join(setting.label for setting in settings) or "nothing"
         raise ValueError(
             f"{name} takes {expected} -- got {len(pieces)} values in {text!r}"
         )
 
     arguments = {}
-    for piece, (label, convert, description) in zip(pieces, settings):
+    for piece, setting in zip(pieces, settings):
         if piece == "":
             continue
         try:
-            arguments[label] = convert(piece)
+            arguments[setting.label] = setting.parse(piece)
         except ValueError:
-            raise ValueError(f"{description} -- got {piece!r}") from None
+            raise ValueError(f"{setting.complaint} -- got {piece!r}") from None
 
     return kind(**arguments)
 
@@ -406,16 +511,86 @@ def parse_colour(text: str) -> tuple[int, int, int]:
     return tuple(parsed[:3])
 
 
-SETTINGS: dict[type[Effect], tuple[tuple[str, object, str], ...]] = {
-    Blur: (("radius", float, "A blur radius is a number of pixels"),),
+TRUE_WORDS = ("yes", "true", "on", "1")
+FALSE_WORDS = ("no", "false", "off", "0")
+
+
+def parse_flag(text: str) -> bool:
+    """A yes or a no, spelled any of the ways people spell them."""
+    word = text.strip().lower()
+    if word in TRUE_WORDS:
+        return True
+    if word in FALSE_WORDS:
+        return False
+    raise ValueError(f"A yes or no answer -- got {text!r}")
+
+
+def choice_of(allowed: tuple[str, ...]):
+    """A parser for one of a fixed set of words."""
+
+    def parse(text: str) -> str:
+        word = text.strip().lower()
+        if word not in allowed:
+            raise ValueError(f"One of {', '.join(allowed)} -- got {text!r}")
+        return word
+
+    return parse
+
+
+@dataclass(frozen=True)
+class Setting:
+    """One thing an effect can be told, and what kind of thing it is.
+
+    The kind is here so the window can draw the right control -- a box to type
+    in, a dropdown, a checkbox -- rather than a text field for everything and a
+    user left to guess that "soft" wants the word "yes". The parser is the same
+    either way, so a typed answer and a clicked one land in the same place.
+    """
+
+    label: str
+    parse: object
+    complaint: str
+    kind: str = "number"
+    options: tuple[str, ...] = ()
+
+
+# What each effect takes after its name, in order. One table rather than a
+# branch per effect, so adding an effect is adding a row.
+SETTINGS: dict[type[Effect], tuple[Setting, ...]] = {
+    Transparent: (
+        Setting(
+            "colour", parse_colour,
+            "A colour is a name like white or a hex value like #ffffff",
+            kind="colour",
+        ),
+        Setting(
+            "match", choice_of(Transparent.MATCHES),
+            "Matching is tolerance or exact",
+            kind="choice", options=Transparent.MATCHES,
+        ),
+        Setting(
+            "tolerance", int,
+            "A tolerance is a whole number of levels, 0 to 255",
+        ),
+        Setting(
+            "soft", parse_flag,
+            "Soft edges are yes or no",
+            kind="flag",
+        ),
+    ),
+    Blur: (Setting("radius", float, "A blur radius is a number of pixels"),),
     Grayscale: (
-        ("tint", parse_colour, "A tint is a colour name like gray or a hex like #8a5a2b"),
+        Setting(
+            "tint", parse_colour,
+            "A tint is a colour name like gray or a hex like #8a5a2b",
+            kind="colour",
+        ),
     ),
     Noise: (
-        ("amount", int, "A noise amount is a whole number of grey levels"),
-        ("seed", int, "A noise seed is a whole number"),
+        Setting("amount", int, "A noise amount is a whole number of grey levels"),
+        Setting("seed", int, "A noise seed is a whole number"),
     ),
-    Monochrome: (("threshold", int, "A monochrome threshold is a whole number"),),
+    Monochrome: (Setting("threshold", int, "A monochrome threshold is a whole number"),),
 }
 
 
