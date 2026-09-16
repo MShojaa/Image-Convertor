@@ -414,14 +414,20 @@ def test_a_file_that_fails_does_not_stop_the_batch(app, images):
 def test_monochrome_into_jpeg_fails_that_file_and_says_why(app, tmp_path):
     folder = tmp_path / "input"
     folder.mkdir()
-    Image.new("RGB", (8, 8)).save(folder / "photo.jpg")
+    # A gradient, so the dither has both black and white in it; a flat square
+    # dithers to one level and there is nothing for jpg to ruin.
+    gradient = Image.new("L", (32, 8))
+    for x in range(32):
+        for y in range(8):
+            gradient.putpixel((x, y), x * 8)
+    gradient.convert("RGB").save(folder / "photo.jpg")
     Image.new("RGB", (8, 8)).save(folder / "logo.png")
 
     run(app, effects=["monochrome"])
 
     failed = events(app, "file_failed")
     assert [f["name"] for f in failed] == ["photo.jpg"]
-    assert "1-bit" in failed[0]["error"]
+    assert "two-level" in failed[0]["error"]
     assert outputs(app) == ["logo.png"]
 
 

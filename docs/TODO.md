@@ -258,6 +258,14 @@ with "same as the input" the run after that overwrites the originals. An
 unwritable destination is refused up front too, because it is the same answer
 for every file in the batch and by the time a save fails the work is done.
 
+Transparency stopped being thrown away at the door. The app used to composite
+every image onto white as the very first thing it did, which made "leave the
+clear area alone" impossible to ask for -- by the time an effect ran there was
+no clear area left. Alpha now survives the whole pipeline and is flattened at
+the end, by `formats.save`, and only when the format cannot hold it. That
+changed what every existing conversion of a transparent image produces, so it
+took the major bump to 4.0.0.
+
 Still open, and now the only thing left in this file:
 
 - **A single file where a folder is accepted.** `find_images()` takes a folder
