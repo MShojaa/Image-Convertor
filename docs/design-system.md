@@ -223,7 +223,14 @@ are different widths and every row's input starts somewhere else. One grid gives
 every row the same columns, and the inputs line up down the panel.
 
 A row is a step number, a checkbox and name, then that effect's settings as
-label/input pairs. Rows with fewer settings pad with empty cells so the columns
+label/control pairs. **The control matches the setting**: a dropdown for a fixed
+set of words, a checkbox for a yes/no, a box to type in otherwise. Each one
+still produces the same text the effect would be typed as, so the two ways in
+cannot drift apart.
+
+A setting the chosen mode does not use is greyed rather than hidden -- a row
+that changes shape when you use it moves everything below it. The one case
+today is the tolerance, which an exact match ignores. Rows with fewer settings pad with empty cells so the columns
 never slide. The settings go `--text-faint` when the box is clear but stay
 visible -- a row that changes height when you check it moves everything below it.
 

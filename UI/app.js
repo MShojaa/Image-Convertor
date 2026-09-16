@@ -127,6 +127,7 @@ function buildEffects(effects, remembered) {
     list.append(effectRow(effect, chosen.get(effect.name), index + 1));
   });
 
+  for (const effect of effects) updateDependents(effect);
   showChain();
 }
 
@@ -165,19 +166,10 @@ function effectRow(effect, values, step) {
     label.className = "setting-label";
     label.textContent = setting.name;
 
-    const input = document.createElement("input");
-    input.type = "text";
-    input.className = "setting-input";
-    input.id = `setting-${effect.name}-${setting.name}`;
-    input.dataset.setting = setting.name;
-    input.value = (values && values[index]) || "";
-    /* The placeholder is the effect's own default, so an empty box is not a
-       question -- it says what will happen if it is left alone. */
-    input.placeholder = setting.default === null ? "dither" : String(setting.default);
-    input.addEventListener("input", showChain);
-    label.htmlFor = input.id;
+    const control = settingControl(effect, setting, values && values[index]);
+    label.htmlFor = control.id;
 
-    row.append(label, input);
+    row.append(label, control);
   });
 
   /* Every row occupies the same number of grid columns, so a row with one
@@ -187,6 +179,76 @@ function effectRow(effect, values, step) {
   }
 
   return row;
+}
+
+/* One control per setting, chosen by what the setting is. A dropdown for a
+   fixed set of words, a checkbox for a yes/no, a box to type in otherwise --
+   rather than a text field for everything and a user left to guess that
+   "soft" wants the word "yes". Every one of them still produces the same
+   text the effect would be typed as, so the two ways in cannot drift. */
+function settingControl(effect, setting, value) {
+  const id = `setting-${effect.name}-${setting.name}`;
+
+  if (setting.kind === "choice") {
+    const select = document.createElement("select");
+    select.id = id;
+    select.className = "setting-input";
+    select.dataset.setting = setting.name;
+    for (const option of setting.options) {
+      select.append(new Option(option, option));
+    }
+    select.value = value || setting.default;
+    select.addEventListener("change", () => {
+      showChain();
+      updateDependents(effect);
+    });
+    return select;
+  }
+
+  if (setting.kind === "flag") {
+    const box = document.createElement("input");
+    box.type = "checkbox";
+    box.id = id;
+    box.className = "setting-flag";
+    box.dataset.setting = setting.name;
+    box.checked = value ? value === "yes" : setting.default === "yes";
+    box.addEventListener("change", showChain);
+    return box;
+  }
+
+  const input = document.createElement("input");
+  input.type = "text";
+  input.id = id;
+  input.className = "setting-input";
+  input.dataset.setting = setting.name;
+  input.value = value || "";
+  /* The placeholder is the effect's own default, so an empty box is not a
+     question -- it says what will happen if it is left alone. */
+  input.placeholder = setting.default === null ? "dither" : String(setting.default);
+  input.addEventListener("input", showChain);
+  return input;
+}
+
+/* A setting the chosen mode does not use is greyed rather than hidden: a row
+   that changes shape when you use it moves everything below it. The one case
+   today is the tolerance, which an exact match ignores. */
+function updateDependents(effect) {
+  const row = document.querySelector(`.effect[data-name="${effect.name}"]`);
+  if (!row) return;
+
+  const match = row.querySelector('[data-setting="match"]');
+  const tolerance = row.querySelector('[data-setting="tolerance"]');
+  if (!match || !tolerance) return;
+
+  tolerance.disabled = match.value === "exact";
+  tolerance.title = tolerance.disabled ? "An exact match ignores the tolerance" : "";
+}
+
+/* The value a control holds, as the text the effect would be typed with. */
+function settingValue(control) {
+  if (control.type === "checkbox") return control.checked ? "yes" : "no";
+  if (control.disabled) return "";
+  return control.value.trim();
 }
 
 /* What will actually run, in order, spelled the way the app would write it.
@@ -203,7 +265,7 @@ function chosenEffects() {
   for (const row of document.querySelectorAll(".effect")) {
     if (row.dataset.on !== "true") continue;
 
-    const values = [...row.querySelectorAll("[data-setting]")].map((i) => i.value.trim());
+    const values = [...row.querySelectorAll("[data-setting]")].map(settingValue);
     /* Trailing blanks are dropped so "monochrome" and "monochrome:" are the
        same thing, and a blank in the middle keeps its place -- "noise::7" is
        the default amount with a chosen seed. */

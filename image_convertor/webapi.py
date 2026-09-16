@@ -92,9 +92,18 @@ class Api:
                 {
                     "name": name,
                     "order": kind.order,
+                    # Each setting says what kind of control it is, so the
+                    # page can draw a dropdown or a checkbox rather than a
+                    # text box for everything and a user left guessing that
+                    # "soft" wants the word "yes".
                     "settings": [
-                        {"name": label, "default": _default_for(kind, label)}
-                        for label, _, _ in _settings_of(kind)
+                        {
+                            "name": setting.label,
+                            "kind": setting.kind,
+                            "options": list(setting.options),
+                            "default": _default_for(kind, setting.label),
+                        }
+                        for setting in _settings_of(kind)
                     ],
                 }
                 # In the order they run. The page lists them this way because
@@ -422,10 +431,20 @@ def _settings_of(kind) -> tuple:
 
 
 def _default_for(kind, label: str) -> object:
-    """An effect's default for one setting, read off the class itself."""
+    """An effect's default for one setting, read off the class itself.
+
+    Turned into something JSON can carry: a colour is a tuple in Python and
+    has to cross as the hex the user would type, and a flag as the word.
+    """
     import dataclasses
 
     for field in dataclasses.fields(kind):
-        if field.name == label:
-            return field.default
+        if field.name != label:
+            continue
+        value = field.default
+        if isinstance(value, tuple):
+            return "#{:02x}{:02x}{:02x}".format(*value[:3])
+        if isinstance(value, bool):
+            return "yes" if value else "no"
+        return value
     return None
