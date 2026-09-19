@@ -870,3 +870,63 @@ def test_effects_this_version_understands_are_kept(app):
     settings.save(settings.Settings(effects=("blur:2", "monochrome::keep")))
 
     assert app.describe_app()["settings"]["effects"] == ["blur:2", "monochrome::keep"]
+
+
+# --- the dialog opens where you already are ------------------------------
+
+class RecordingWindow(FakeWindow):
+    """Remembers what directory the dialog was asked to open at."""
+
+    def __init__(self):
+        super().__init__()
+        self.dialog_directory = None
+
+    def create_file_dialog(self, *args, **kwargs):
+        self.dialog_directory = kwargs.get("directory")
+        return super().create_file_dialog(*args, **kwargs)
+
+
+@pytest.fixture
+def recording(tmp_path):
+    api = Api(tmp_path)
+    api.attach(RecordingWindow())
+    return api
+
+
+def test_the_dialog_opens_at_the_folder_already_chosen(recording, images):
+    recording._window.dialog_returns = [str(images)]
+
+    recording.choose_folder("input", str(images))
+
+    assert wait_for(lambda: recording._window.dialog_directory is not None)
+    assert recording._window.dialog_directory == str(images)
+
+
+def test_a_folder_that_does_not_exist_yet_opens_at_its_parent(recording, tmp_path):
+    """The output folder is usually somewhere not created yet, and a dialog
+    asked to open at a path that is not there ignores it and opens wherever it
+    last was -- which is the behaviour being fixed."""
+    recording._window.dialog_returns = None
+
+    recording.choose_folder("output", str(tmp_path / "not" / "there" / "yet"))
+
+    assert wait_for(lambda: recording._window.dialog_directory is not None)
+    assert recording._window.dialog_directory == str(tmp_path)
+
+
+def test_no_folder_to_start_from_is_not_an_error(recording):
+    recording._window.dialog_returns = None
+
+    recording.choose_folder("input", "")
+
+    assert wait_for(lambda: folder_events(recording))
+    assert recording._window.dialog_directory == ""
+
+
+def test_a_nonsense_start_path_does_not_stop_the_dialog(recording):
+    recording._window.dialog_returns = None
+
+    recording.choose_folder("input", "\0not a path\0")
+
+    assert wait_for(lambda: folder_events(recording))
+    assert folder_events(recording)[0]["ok"] is True
