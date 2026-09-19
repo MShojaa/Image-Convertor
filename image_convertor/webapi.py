@@ -125,7 +125,7 @@ class Api:
             settings={
                 "size": stored.size,
                 "output_format": stored.output_format,
-                "effects": list(stored.effects),
+                "effects": _still_valid(stored.effects),
                 "theme": stored.theme,
             },
         )
@@ -379,6 +379,29 @@ class Api:
             self._window.evaluate_js(f"window.onAppEvent({event!r}, {_json(payload)})")
         except Exception:
             pass
+
+
+def _still_valid(remembered: tuple[str, ...]) -> list[str]:
+    """The remembered effects that this version can still read.
+
+    A settings file is written by whichever version ran last, and an effect's
+    settings can change between them -- `monochrome:128:no` meant something in
+    4.3 and means nothing now. Handing one of those to the page would tick the
+    box, and then every run would fail on it until the user worked out which
+    row to untick.
+
+    So an effect that no longer parses is dropped, quietly, the same way
+    `settings.load` drops a key it cannot read. The alternative is an app that
+    will not convert anything because of a file it wrote itself.
+    """
+    kept = []
+    for text in remembered:
+        try:
+            parse_effect(text)
+        except ValueError:
+            continue
+        kept.append(text)
+    return kept
 
 
 def _same_folder(one: Path, other: Path) -> bool:

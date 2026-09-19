@@ -721,8 +721,15 @@ def cutout(size=(16, 8)):
 
 def test_keeping_the_clear_areas_clear_is_the_default():
     """Noise appearing where the user said transparent is a surprise."""
-    for kind in (Blur, Noise, Grayscale, Monochrome):
+    for kind in (Blur, Noise, Grayscale):
         assert kind().keep_clear is True
+
+
+def test_monochrome_answers_the_same_question_its_own_way():
+    """It cannot have the flag as well: filling the clear areas and then
+    putting the original alpha back over the top undoes the fill."""
+    assert not hasattr(Monochrome(), "keep_clear")
+    assert Monochrome().clear == "white"
 
 
 def test_the_transparent_effect_has_no_such_flag():
@@ -766,11 +773,40 @@ def test_grayscale_leaves_the_clear_area_alone():
     assert set(toned.crop((0, 0, 8, 8)).getchannel("A").tobytes()) == {0}
 
 
-def test_monochrome_keeps_the_alpha_it_was_given():
+def test_monochrome_gives_one_bit_by_default():
+    """One bit or a transparent area, not both -- and the bit wins."""
     result = apply_effects(cutout(), (Monochrome(128),))
+
+    assert result.mode == "1"
+
+
+def test_monochrome_fills_the_clear_area_with_white_not_black():
+    """A transparent pixel keeps whatever colour hid under it, which in a PNG
+    is usually black -- so a logo's clear background would dither into a black
+    rectangle."""
+    result = apply_effects(cutout(), (Monochrome(128),))
+
+    assert set(result.convert("L").crop((0, 0, 8, 8)).tobytes()) == {255}
+
+
+def test_monochrome_can_keep_the_alpha_instead():
+    result = apply_effects(cutout(), (Monochrome(128, clear="keep"),))
 
     assert result.mode == "LA"
     assert set(result.crop((0, 0, 8, 8)).getchannel("A").tobytes()) == {0}
+
+
+def test_an_unknown_clear_choice_names_the_ones_there_are():
+    with pytest.raises(ValueError) as raised:
+        Monochrome(clear="invisible")
+
+    assert "white" in str(raised.value) and "keep" in str(raised.value)
+
+
+def test_the_clear_choice_reads_back_as_it_would_be_typed():
+    effect = Monochrome(128, clear="keep")
+
+    assert parse_effect(effect.described()) == effect
 
 
 def test_an_opaque_image_is_unaffected_by_the_flag():
