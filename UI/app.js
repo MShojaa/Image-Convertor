@@ -64,7 +64,10 @@ function wire() {
   el("output-folder").addEventListener("change", (event) => setOutputFolder(event.target.value));
   el("convert").addEventListener("click", convert);
   el("cancel").addEventListener("click", () => window.pywebview.api.cancel_conversion());
-  el("theme-toggle").addEventListener("click", toggleTheme);
+  for (const button of document.querySelectorAll("[data-theme-choice]")) {
+    button.addEventListener("click", () => chooseTheme(button.dataset.themeChoice));
+  }
+  el("theme-switcher").addEventListener("keydown", themeKeys);
   el("reveal").addEventListener("click", revealOutput);
   el("format").addEventListener("change", showFormatNote);
 
@@ -481,17 +484,16 @@ function resolveTheme(choice) {
 
 function applyTheme(choice) {
   state.theme = THEMES.includes(choice) ? choice : "system";
-  const showing = resolveTheme(state.theme);
-  document.documentElement.dataset.theme = showing;
+  document.documentElement.dataset.theme = resolveTheme(state.theme);
 
-  /* The button offers the other one, and says which in words -- an icon
-     alone does not, and this is the only control in the window with no
-     visible label. */
-  const offering = showing === "dark" ? "light" : "dark";
-  const words = `Switch to the ${offering} theme`;
-  el("theme-label").textContent = words;
-  el("theme-toggle").setAttribute("aria-label", words);
-  el("theme-toggle").title = words;
+  /* A roving tabindex: the group is one stop on the way round the window,
+     and the arrow keys move within it. Three separate tab stops for one
+     setting would be three times the tabbing for no more choice. */
+  for (const button of document.querySelectorAll("[data-theme-choice]")) {
+    const chosen = button.dataset.themeChoice === state.theme;
+    button.setAttribute("aria-checked", String(chosen));
+    button.tabIndex = chosen ? 0 : -1;
+  }
 }
 
 /* Only while the choice is "system" -- someone who picked a theme
@@ -500,18 +502,34 @@ LIGHT_QUERY.addEventListener("change", () => {
   if (state.theme === "system") applyTheme("system");
 });
 
-/* One click, the opposite of what is on screen.
+/* Pick one of the three, and remember it. "system" is one of the three
+   rather than the absence of a choice, so going back to following the
+   desktop is a click like any other. */
+async function chooseTheme(choice) {
+  if (choice === state.theme) return;
+  applyTheme(choice);
+  await window.pywebview.api.save_theme(choice);
+}
 
-   It used to cycle system -> dark -> light, which from a dark desktop meant
-   the first click picked "dark" and nothing appeared to happen. What the
-   button is for is changing the theme, so it changes the theme: whatever is
-   showing, the click gives the other one.
+/* Arrow keys move through the group, which is what a radiogroup does and
+   what the roving tabindex above is for. Home and End go to the ends. */
+function themeKeys(event) {
+  const order = ["system", "light", "dark"];
+  const at = order.indexOf(state.theme);
 
-   That first click is also what ends "follow the desktop" -- before it there
-   is nothing stored and every start follows the system, after it the choice
-   is saved and is what every start uses. */
-async function toggleTheme() {
-  const next = resolveTheme(state.theme) === "dark" ? "light" : "dark";
-  applyTheme(next);
-  await window.pywebview.api.save_theme(next);
+  let wanted = null;
+  if (event.key === "ArrowRight" || event.key === "ArrowDown") {
+    wanted = order[(at + 1) % order.length];
+  } else if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
+    wanted = order[(at - 1 + order.length) % order.length];
+  } else if (event.key === "Home") {
+    wanted = order[0];
+  } else if (event.key === "End") {
+    wanted = order[order.length - 1];
+  }
+
+  if (wanted === null) return;
+  event.preventDefault();
+  chooseTheme(wanted);
+  document.querySelector(`[data-theme-choice="${wanted}"]`).focus();
 }

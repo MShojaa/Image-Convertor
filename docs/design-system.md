@@ -204,19 +204,28 @@ focus never changes an element's size and nothing shifts when you tab through.
 appears for the keyboard and not for the mouse, but there is no rule anywhere
 that sets `outline: none` without putting something else in its place.
 
-### The theme button
+### The theme switcher
 
-An icon, and **it shows what a click gives you, not what you have**: a sun while
-the page is dark, a moon while it is light. Showing the current theme instead
-reads as a status light, and nobody presses a status light. Its only label is
-that picture, so the accessible name and the tooltip both carry the sentence --
-"Switch to the light theme".
+A pill with three choices in it -- system, light, dark, as a monitor, a sun and
+a moon -- with the chosen one ringed. **All three are on screen at once**, so
+which theme is set and what the alternatives are can both be read without
+pressing anything.
 
-**One click, the opposite of what is on screen.** It used to cycle system ->
-dark -> light, which from a dark desktop meant the first click picked "dark" and
-nothing appeared to happen. That first click is also what ends
-follow-the-desktop: before it nothing is stored and every start follows the
-system, after it the choice is saved and is what every start uses.
+It replaced a single button that cycled through the three. Two things were
+wrong with that: from a dark desktop the first press picked "dark" and nothing
+appeared to change, and getting back to "system" meant pressing until it came
+round again. Here "system" is one of the three, so following the desktop is a
+click like any other rather than a state you fall out of.
+
+**It is a radiogroup**, because that is what it is: one of three. The group is a
+single tab stop with a roving `tabindex`, and the arrow keys move within it --
+three separate tab stops for one setting would be three times the tabbing for
+no more choice. Each icon carries its name in a `visually-hidden` span and a
+`title`, since an icon alone says nothing to a screen reader.
+
+The ring on the chosen one is a border plus a lifted surface, not just a
+brighter colour. The unchosen two are already a colour apart, and three shades
+of the same idea does not read as a state.
 
 ### Buttons
 

@@ -154,13 +154,13 @@ complaining.
 
 ## Dark and light
 
-The icon in the corner switches between them, and it shows what a click gives
-you rather than what you have: a sun on a dark page, a moon on a light one.
+The switcher in the corner has all three: **system**, **light** and **dark**,
+as a monitor, a sun and a moon, with the current one ringed.
 
-**The system theme is the default** and follows the OS, including while the
-window is open. The first click on the icon ends that -- whatever theme is
-showing, the click gives you the other one, and that choice is saved and used
-at every start from then on.
+**System is the default** and follows the OS, including while the window is
+open. Picking light or dark stops that and sticks; picking system again starts
+it following once more. Whichever you choose is saved and is what the next
+start uses.
 
 ## Tests
 
