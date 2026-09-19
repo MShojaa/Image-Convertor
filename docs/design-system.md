@@ -204,6 +204,20 @@ focus never changes an element's size and nothing shifts when you tab through.
 appears for the keyboard and not for the mouse, but there is no rule anywhere
 that sets `outline: none` without putting something else in its place.
 
+### The theme button
+
+An icon, and **it shows what a click gives you, not what you have**: a sun while
+the page is dark, a moon while it is light. Showing the current theme instead
+reads as a status light, and nobody presses a status light. Its only label is
+that picture, so the accessible name and the tooltip both carry the sentence --
+"Switch to the light theme".
+
+**One click, the opposite of what is on screen.** It used to cycle system ->
+dark -> light, which from a dark desktop meant the first click picked "dark" and
+nothing appeared to happen. That first click is also what ends
+follow-the-desktop: before it nothing is stored and every start follows the
+system, after it the choice is saved and is what every start uses.
+
 ### Buttons
 
 Two kinds. **Primary** is `--accent` with `--accent-text`, and there is exactly
@@ -217,27 +231,37 @@ unavailable at a glance.
 
 ### The effect rows
 
-**The whole list is one grid, and each row is `display: contents`.** That is not
-a flourish: a row-per-flexbox sizes its own labels, so "radius" and "threshold"
-are different widths and every row's input starts somewhere else. One grid gives
-every row the same columns, and the inputs line up down the panel.
+**A fixed name column, then that effect's settings flowing after it.** One grid
+across the whole list was the first answer to lining the inputs up, and it
+aligned them and then overflowed: the column count came from the widest effect,
+and five columns of settings do not fit the panel -- `transparent` had its
+tolerance and soft edges off the side of the window, behind a scrollbar. The
+fixed column keeps what the alignment was for, since every row's settings start
+at the same x, and past it they wrap, which is the part a shared grid cannot do.
 
-A row is a step number, a checkbox and name, then that effect's settings as
+A row is a step number, a checkbox and name, then those settings as
 label/control pairs. **The control matches the setting**: a dropdown for a fixed
 set of words, a checkbox for a yes/no, a box to type in otherwise. Each one
 still produces the same text the effect would be typed as, so the two ways in
-cannot drift apart.
+cannot drift apart. A dropdown sizes to its longest option rather than to the
+width the typed boxes use -- "tolerance" does not fit in 5rem and came out as
+"tolera".
+
+**A picked row is tinted and its number takes the accent**, so what the run will
+do reads off the panel at a glance rather than by checking five boxes.
 
 A setting the chosen mode does not use is greyed rather than hidden -- a row
-that changes shape when you use it moves everything below it. The one case
-today is the tolerance, which an exact match ignores. Rows with fewer settings pad with empty cells so the columns
-never slide. The settings go `--text-faint` when the box is clear but stay
-visible -- a row that changes height when you check it moves everything below it.
+that changes shape when you use it moves everything below it. The one case today
+is the tolerance, which an exact match ignores. The settings go `--text-faint`
+when the box is clear but stay visible, for the same reason.
 
-They are listed **in the order they run**, and now numbered with it, because
-that order is a real thing the user needs to know and the list is the cheapest
-place to say it. Under the list, a line spells out what the current selection
-will actually do: `Will run: blur -> noise -> monochrome`.
+They are listed **in the order they run**, and numbered with it, because that
+order is a real thing the user needs to know and the list is the cheapest place
+to say it. Under the list, a line spells out what the current selection will
+actually do: `Will run: blur -> monochrome`. **A setting left at its default is
+written as nothing** there, the same rule the Python side follows when it
+describes an effect -- otherwise that line reads
+`transparent::tolerance::no -> monochrome::white`, which is noise.
 
 ### The log
 
