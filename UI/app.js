@@ -65,6 +65,7 @@ function wire() {
   el("convert").addEventListener("click", convert);
   el("cancel").addEventListener("click", () => window.pywebview.api.cancel_conversion());
   el("theme-toggle").addEventListener("click", toggleTheme);
+  el("reveal").addEventListener("click", revealOutput);
   el("format").addEventListener("change", showFormatNote);
 
   /* Validated as it is typed, by the same parser the conversion uses, so the
@@ -413,6 +414,14 @@ function progress(done, total) {
   el("progress-bar").style.width = `${percent}%`;
   el("counter").textContent = total ? `${done} / ${total}` : "";
   document.querySelector(".progress").setAttribute("aria-valuenow", String(percent));
+}
+
+/* Show the results. The folder is created if it is not there yet, so the
+   button works before the first run -- an empty window is a fair answer to
+   "where do these go?". */
+async function revealOutput() {
+  const answer = await window.pywebview.api.reveal_folder(state.outputFolder);
+  if (!answer.ok) fail(answer.error);
 }
 
 /* -- the log ------------------------------------------------------------ */
