@@ -48,7 +48,9 @@ format left as "same as the input", the run after that would overwrite the
 originals.
 
 Then choose a size, a format and any effects, and press Convert. Every file is
-reported as it goes, and a file that fails does not stop the batch.
+reported as it goes, and a file that fails does not stop the batch. **Open
+output folder** shows the results in Explorer when it has finished -- or before
+it starts, if you just want to see where they will go.
 
 ### The effects
 
@@ -152,9 +154,13 @@ complaining.
 
 ## Dark and light
 
-The button in the corner cycles System, Dark, Light. **System is the default**
-and follows the OS, including while the window is open; picking Dark or Light
-outright sticks until you change it.
+The icon in the corner switches between them, and it shows what a click gives
+you rather than what you have: a sun on a dark page, a moon on a light one.
+
+**The system theme is the default** and follows the OS, including while the
+window is open. The first click on the icon ends that -- whatever theme is
+showing, the click gives you the other one, and that choice is saved and used
+at every start from then on.
 
 ## Tests
 
