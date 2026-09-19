@@ -130,11 +130,13 @@ class Api:
             },
         )
 
-    def choose_folder(self, which: str = "input") -> dict:
+    def choose_folder(self, which: str = "input", start: str = "") -> dict:
         """Open the native folder picker. The answer arrives as an event.
 
         One opener for both fields; `which` comes back on the event so the
-        page knows which box to fill in.
+        page knows which box to fill in. `start` is the folder to open in --
+        without it the dialog opens wherever Windows last left it, which is
+        rarely the folder whose path is sitting in the box next to the button.
 
         **It must not open the dialog here**, and this is the one thing in this
         file that is not a matter of taste. A `js_api` method runs while the
@@ -160,15 +162,19 @@ class Api:
             return _fail(f"Unknown folder: {which}")
 
         self._choosing = True
-        threading.Thread(target=self._choose_folder, args=(which,), daemon=True).start()
+        threading.Thread(
+            target=self._choose_folder, args=(which, start), daemon=True
+        ).start()
         return _ok(opening=True)
 
-    def _choose_folder(self, which: str) -> None:
+    def _choose_folder(self, which: str, start: str = "") -> None:
         """The dialog, on its own thread, reporting back when it closes."""
         import webview
 
         try:
-            chosen = self._window.create_file_dialog(webview.FOLDER_DIALOG)
+            chosen = self._window.create_file_dialog(
+                webview.FOLDER_DIALOG, directory=_openable(start)
+            )
         except Exception as error:
             self._emit("folder_chosen", dict(_fail(str(error)), which=which))
             return
@@ -402,6 +408,28 @@ def _still_valid(remembered: tuple[str, ...]) -> list[str]:
             continue
         kept.append(text)
     return kept
+
+
+def _openable(folder: str) -> str:
+    """The nearest folder above `folder` that exists, or "" if there is none.
+
+    A dialog asked to open at a path that is not there ignores it and opens
+    wherever it last was, which is the behaviour this is trying to fix. The
+    output folder is the case that matters: it is usually somewhere that has
+    not been created yet, and the folder it will be created in is the right
+    place to start.
+    """
+    if not folder:
+        return ""
+
+    try:
+        path = Path(folder).expanduser()
+        for candidate in (path, *path.parents):
+            if candidate.is_dir():
+                return str(candidate)
+    except OSError:
+        pass
+    return ""
 
 
 def _same_folder(one: Path, other: Path) -> bool:

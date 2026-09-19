@@ -285,7 +285,10 @@ async function browse(which) {
      result: the dialog cannot be opened from inside a js_api call without
      deadlocking the window. See choose_folder() in webapi.py. */
   browseButtons(true);
-  const answer = await window.pywebview.api.choose_folder(which);
+  /* Start the dialog where the box already points, rather than wherever
+     Windows last left it. */
+  const start = which === "output" ? state.outputFolder : state.folder;
+  const answer = await window.pywebview.api.choose_folder(which, start);
   if (!answer.ok) {
     browseButtons(false);
     fail(answer.error);
