@@ -199,51 +199,65 @@ body {
   }
 }
 
-/* A square button with no text in it. Same height as every other control,
-   so the header lines up. */
-.icon-button {
-  width: var(--control-height);
+/* Three choices in a pill, the chosen one ringed. Same height as every
+   other control, so the header lines up with the panels below it. */
+.theme-switcher {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
   height: var(--control-height);
+  padding: 0 var(--space-1);
+  border: 1px solid var(--border);
+  /* Fully round: it is a group of round choices, not a row of boxes. */
+  border-radius: 999px;
+  background: var(--surface);
+}
+
+.theme-choice {
+  width: 24px;
+  height: 24px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   padding: 0;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--surface-raised);
-  color: var(--text-dim);
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-faint);
   cursor: pointer;
-  transition: border-color var(--fast) ease-out, color var(--fast) ease-out;
+  transition:
+    color var(--fast) ease-out,
+    background var(--fast) ease-out,
+    border-color var(--fast) ease-out;
 }
 
-.icon-button:hover {
-  border-color: var(--border-strong);
+.theme-choice:hover {
   color: var(--text);
 }
 
-.icon-button:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
+/* The ring is the whole signal, so it is a border and a lifted surface
+   rather than a colour change alone -- the unchosen two are already a
+   colour change away, and three shades of the same idea is not a state. */
+.theme-choice[aria-checked="true"] {
+  color: var(--text);
+  background: var(--surface-raised);
   border-color: var(--border-strong);
 }
 
-.icon-button svg {
-  width: 18px;
-  height: 18px;
+.theme-choice:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.theme-choice svg {
+  width: 15px;
+  height: 15px;
   fill: none;
   stroke: currentColor;
   stroke-width: 1.8;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
-
-/* The icon shows what a click gives you: a sun while the page is dark, a
-   moon while it is light. Showing the current theme instead reads as a
-   status light, and nobody presses a status light. */
-.icon-moon { display: none; }
-
-:root[data-theme="light"] .icon-sun { display: none; }
-:root[data-theme="light"] .icon-moon { display: inline; }
 
 /* Available to a screen reader, invisible on screen. For a control whose
    only label is a picture. */
