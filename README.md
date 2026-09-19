@@ -79,10 +79,13 @@ to come first.
                 default tint is mid grey, which is that ramp doing
                 nothing, i.e. plain grayscale
     monochrome  black and white; with a threshold it is a hard cut, without
-                one it dithers
+                one it dithers. Writes a genuine 1-bit file. If the image
+                has transparency there is a choice to make -- see below
 
-Every other effect has a **keep clear** option, on by default: it leaves the
-transparent parts of an image alone. Noise appearing in an area you called
+**blur**, **noise** and **grayscale** each have a **keep clear** option, on by
+default: it leaves the transparent parts of an image alone. (`monochrome`
+answers the same question its own way -- see below -- and `transparent` is the
+one that creates the clear areas in the first place.) Noise appearing in an area you called
 transparent is a surprise, and a blur that softens a cut-out's silhouette is
 usually not what was being asked for -- the picture blurs, the outline stays.
 Turn it off to treat the whole rectangle as picture. A half-transparent pixel
@@ -116,15 +119,25 @@ looks identical because there are only two levels in it -- webp is written
 lossless in that case so the dots survive. **jpg is refused**: it is lossy, so a
 dither comes back with ringing around every dot, and Pillow writes it anyway as
 8-bit grey rather than complaining. The app stops instead and says to use png,
-bmp or tiff.
+bmp or tiff. Only that pairing is refused: a colour jpg converts to a jpg as
+you would expect, and in a mixed folder the one refused file fails on its own
+while the rest convert.
 
-An image that also has transparency comes out of `monochrome` as 8-bit grey plus
-alpha rather than 1-bit -- one bit has no room for a third state. It is the same
-two levels either way, and jpg refuses it just the same.
+**One bit or a transparent area: not both.** One bit has two states, and a
+transparent monochrome image needs three -- black, white and see-through.
+Nothing in PNG holds that at one bit; the closest is a three-entry palette,
+which comes out at two.
 
-Only that pairing is refused. A colour jpg converts to a jpg as you would
-expect, and in a mixed folder the one refused file fails on its own while the
-rest convert.
+So `monochrome` has a **clear areas** choice, and it defaults to the bit:
+
+    white   fill the transparent areas with white and write a genuine
+            1-bit file. This is what a monochrome bitmap is for
+    keep    keep the transparency, in 8-bit grey plus alpha -- the same
+            two levels, carried in a mode with room for the alpha
+
+An alpha channel that is entirely opaque does not count: plenty of PNGs are
+RGBA with every pixel at 255, and that channel is dropped on the way in rather
+than costing you the bit for transparency the image does not have.
 
 ## What it remembers
 

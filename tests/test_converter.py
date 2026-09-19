@@ -14,7 +14,7 @@ from image_convertor.converter import (
     flatten_to_white,
     parse_size,
 )
-from image_convertor.effects import DEFAULT_THRESHOLD, Monochrome
+from image_convertor.effects import DEFAULT_THRESHOLD, Blur, Monochrome
 
 
 def to_monochrome(image, threshold):
@@ -168,14 +168,26 @@ def test_convert_image_keeps_transparency_through_the_whole_pipeline(tmp_path):
     Image.new("RGBA", (20, 16), (0, 0, 0, 0)).save(source)
     destination = tmp_path / "out" / "logo.png"
 
-    written = convert_image(
-        source, destination, Size(10, 10), (Monochrome(DEFAULT_THRESHOLD),)
-    )
+    written = convert_image(source, destination, Size(10, 10), (Blur(1),))
 
     assert written.size == Size(10, 10)
     with Image.open(destination) as result:
         assert result.format == "PNG"  # the source's own format, by default
-        # "LA", not "1": one bit has no room for a third state.
+        assert result.mode == "RGBA"
+        assert set(result.getchannel("A").tobytes()) == {0}
+
+
+def test_monochrome_asked_to_keep_it_writes_grey_plus_alpha(tmp_path):
+    """The other side of the trade: transparency costs the bit."""
+    source = tmp_path / "logo.png"
+    Image.new("RGBA", (20, 16), (0, 0, 0, 0)).save(source)
+
+    convert_image(
+        source, tmp_path / "out.png", None,
+        (Monochrome(DEFAULT_THRESHOLD, clear="keep"),),
+    )
+
+    with Image.open(tmp_path / "out.png") as result:
         assert result.mode == "LA"
         assert set(result.getchannel("A").tobytes()) == {0}
 

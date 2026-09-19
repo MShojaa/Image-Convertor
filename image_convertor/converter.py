@@ -75,16 +75,26 @@ def normalise(image: Image.Image) -> Image.Image:
     transparency index and greyscale-plus-alpha both become RGBA; everything
     else becomes RGB.
 
-    **Alpha is kept.** It used to be composited onto white here, before
-    anything else ran, which made "do not touch the transparent area"
-    impossible to ask for: by the time an effect saw the image there was no
-    transparent area left. Flattening now happens at the end, and only when
+    **Alpha is kept, when there is any.** It used to be composited onto white
+    here, before anything else ran, which made "do not touch the transparent
+    area" impossible to ask for: by the time an effect saw the image there was
+    no transparent area left. Flattening now happens at the end, and only when
     the chosen format cannot hold alpha.
+
+    **An alpha channel that is entirely opaque is dropped**, because it says
+    nothing. Plenty of PNGs are RGBA with every pixel at 255 -- a save from an
+    editor that always writes four channels -- and carrying that channel
+    through means monochrome has to hand back 8-bit grey plus alpha instead of
+    1-bit, for transparency the image does not have.
     """
     if image.mode == "P":
-        return image.convert("RGBA" if "transparency" in image.info else "RGB")
+        image = image.convert("RGBA" if "transparency" in image.info else "RGB")
+
     if image.mode in ("RGBA", "LA", "PA", "La"):
-        return image.convert("RGBA")
+        image = image.convert("RGBA")
+        lowest, _ = image.getchannel("A").getextrema()
+        return image if lowest < 255 else image.convert("RGB")
+
     return image.convert("RGB")
 
 

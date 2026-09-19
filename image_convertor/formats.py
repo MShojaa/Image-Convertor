@@ -181,6 +181,13 @@ def save(image: Image.Image, destination: Path, fmt: Format) -> None:
         # white is what "no transparency" has to mean.
         image = flatten_to_white(image)
 
+        # Flattening leaves 8-bit grey behind, even when what went in had two
+        # levels: a monochrome image with transparency is carried as "LA",
+        # since one bit has no room for a third state, and dropping the alpha
+        # gives back the two levels and the room. So take the bit back.
+        if two_levels(image):
+            image = image.convert("1")
+
     options: dict[str, object] = {}
 
     if fmt is WEBP:

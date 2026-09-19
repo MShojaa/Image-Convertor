@@ -72,6 +72,11 @@ SOFT_EDGE_RADIUS = 1.0
 # was being asked for. Turn it off to treat the whole rectangle as picture.
 KEEP_CLEAR = True
 
+# White, and one bit. Monochrome cannot do both a transparent area and one bit
+# per pixel -- one bit has two states and that needs three -- so this is which
+# one wins. See Monochrome for the whole argument.
+DEFAULT_CLEAR = "white"
+
 
 @dataclass(frozen=True)
 class Effect:
@@ -385,25 +390,52 @@ class Monochrome(Effect):
     It runs last, always. Everything else works on grey levels this step
     throws away.
 
-    An image carrying transparency comes back as "LA" rather than "1", because
-    one bit has no room for a third state. It is the same two levels either
-    way.
+    **One bit or a transparent area: not both.** One bit has two states and a
+    transparent monochrome image needs three -- black, white, and see-through.
+    Nothing in PNG holds that at one bit either; the closest is a three-entry
+    palette, which comes out at two.
+
+    So `clear` decides which one wins, and it defaults to the bit:
+
+    - **white** fills the transparent areas with white and returns mode "1",
+      which is a genuine 1-bit file. This is what a monochrome bitmap is for.
+    - **keep** keeps the transparency and returns "LA" -- the same two levels,
+      carried in 8-bit grey because that is where there is room for the alpha.
+
+    It replaces the `keep clear` flag the other effects have rather than
+    sitting next to it. The two would contradict each other: filling the clear
+    areas and then putting the original alpha back over the top undoes the
+    fill.
     """
 
     threshold: int | None = None
-    keep_clear: bool = KEEP_CLEAR
+    clear: str = DEFAULT_CLEAR
 
     name: ClassVar[str] = "monochrome"
     order: ClassVar[int] = 90
+
+    CLEARS: ClassVar[tuple[str, ...]] = ("white", "keep")
 
     def __post_init__(self) -> None:
         if self.threshold is not None and not 0 <= self.threshold <= 255:
             raise ValueError(
                 f"A threshold is a grey level, 0 to 255 -- got {self.threshold}"
             )
+        if self.clear not in self.CLEARS:
+            allowed = " or ".join(self.CLEARS)
+            raise ValueError(f"Clear areas are {allowed} -- got {self.clear!r}")
 
     def apply(self, image: Image.Image) -> Image.Image:
         alpha = image.getchannel("A") if image.mode in ("RGBA", "LA", "La") else None
+
+        if alpha is not None and self.clear == "white":
+            # Onto white first, not straight to grey: a transparent pixel
+            # keeps whatever colour was hiding under it, which in a PNG is
+            # usually black, and a logo's clear background would dither into
+            # a black rectangle.
+            background = Image.new("RGBA", image.size, (255, 255, 255, 255))
+            image = Image.alpha_composite(background, image.convert("RGBA"))
+            alpha = None
 
         grey = image.convert("L")
         if self.threshold is None:
@@ -414,12 +446,12 @@ class Monochrome(Effect):
             )
 
         if alpha is None:
+            # Mode "1": one bit per pixel, all the way to the file.
             return black_and_white
 
-        # One bit has no room for a third state, so an image that has to keep
-        # its transparency comes back as "LA": the same two levels, in a mode
-        # that has somewhere to put the alpha. `formats.two_levels` is what
-        # notices it is still black and white.
+        # Asked to keep the transparency, so the bit goes instead: "LA" is the
+        # same two levels in a mode with somewhere to put the alpha.
+        # `formats.two_levels` is what notices it is still black and white.
         return Image.merge("LA", (black_and_white.convert("L"), alpha))
 
 
@@ -689,9 +721,9 @@ SETTINGS: dict[type[Effect], tuple[Setting, ...]] = {
     Monochrome: (
         Setting("threshold", int, "A monochrome threshold is a whole number"),
         Setting(
-            "keep_clear", parse_flag,
-            "Keeping the clear areas clear is yes or no",
-            kind="flag", title="keep clear",
+            "clear", choice_of(Monochrome.CLEARS),
+            "Clear areas are white or keep",
+            kind="choice", options=Monochrome.CLEARS, title="clear areas",
         ),
     ),
 }

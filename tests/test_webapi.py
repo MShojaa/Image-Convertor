@@ -844,3 +844,29 @@ def test_a_conversion_can_key_a_colour_out(app, tmp_path):
         assert result.mode == "RGBA"
         assert result.getchannel("A").getpixel((0, 0)) == 0
         assert result.getchannel("A").getpixel((7, 0)) == 255
+
+
+# --- a settings file written by another version --------------------------
+
+def test_an_effect_this_version_cannot_read_is_dropped(app):
+    """monochrome's third setting was a yes/no flag in 4.3 and is a choice
+    now. Handing the old spelling to the page would tick the box and then
+    fail every run on it, because of a file the app wrote itself."""
+    settings.save(settings.Settings(effects=("blur:2", "monochrome:128:no")))
+
+    assert app.describe_app()["settings"]["effects"] == ["blur:2"]
+
+
+def test_a_settings_file_of_nothing_but_stale_effects_still_starts(app):
+    settings.save(settings.Settings(effects=("monochrome:128:no",)))
+
+    described = app.describe_app()
+
+    assert described["ok"]
+    assert described["settings"]["effects"] == []
+
+
+def test_effects_this_version_understands_are_kept(app):
+    settings.save(settings.Settings(effects=("blur:2", "monochrome::keep")))
+
+    assert app.describe_app()["settings"]["effects"] == ["blur:2", "monochrome::keep"]
