@@ -209,6 +209,36 @@ class Api:
             names=[image.name for image in images[:200]],
         )
 
+    def reveal_folder(self, folder: str) -> dict:
+        """Open a folder in the file manager.
+
+        The one place the app reaches outside itself, so it is worth being
+        plain about what it can and cannot be asked to do: it opens a folder,
+        and only a folder. `explorer.exe` given a file would select it, and
+        given something that is neither would do whatever the shell makes of
+        it, so what arrives here is resolved and checked first.
+
+        A folder that does not exist yet is created rather than refused. The
+        output folder is offered before the first run, and "there is nothing
+        there yet" is a thing to see an empty window about, not an error.
+        """
+        path = Path(folder).expanduser() if folder else self._base / OUTPUT_NAME
+
+        if path.exists() and not path.is_dir():
+            return _fail(f"Not a folder: {path}")
+
+        try:
+            path.mkdir(parents=True, exist_ok=True)
+        except OSError as error:
+            return _fail(f"Cannot open {path}: {error}")
+
+        try:
+            _open_in_file_manager(path)
+        except OSError as error:
+            return _fail(f"Could not open {path}: {error}")
+
+        return _ok(folder=str(path))
+
     def check_size(self, text: str) -> dict:
         """Validate a size box as it is typed, so the error is not a surprise."""
         try:
@@ -408,6 +438,25 @@ def _still_valid(remembered: tuple[str, ...]) -> list[str]:
             continue
         kept.append(text)
     return kept
+
+
+def _open_in_file_manager(folder: Path) -> None:
+    """Show a folder to the user, on whichever system this is.
+
+    `os.startfile` is the Windows one and is what Explorer's own address bar
+    does. The others are here so a developer on another machine gets a window
+    rather than a traceback; this app ships for Windows.
+    """
+    import os
+    import subprocess
+    import sys
+
+    if sys.platform == "win32":
+        os.startfile(folder)  # noqa: S606 -- a folder we resolved ourselves
+        return
+
+    opener = "open" if sys.platform == "darwin" else "xdg-open"
+    subprocess.Popen([opener, str(folder)])
 
 
 def _openable(folder: str) -> str:
