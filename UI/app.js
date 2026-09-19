@@ -119,11 +119,6 @@ function buildEffects(effects, remembered) {
     chosen.set(name, values);
   }
 
-  /* The widest row decides how many setting columns the grid has, so all
-     rows share one set of column widths and every input lines up. */
-  state.settingColumns = Math.max(...effects.map((e) => e.settings.length), 0);
-  list.style.setProperty("--setting-columns", state.settingColumns);
-
   effects.forEach((effect, index) => {
     list.append(effectRow(effect, chosen.get(effect.name), index + 1));
   });
@@ -147,6 +142,7 @@ function effectRow(effect, values, step) {
   number.setAttribute("aria-hidden", "true");
 
   const toggle = document.createElement("label");
+  toggle.className = "effect-name";
   const box = document.createElement("input");
   box.type = "checkbox";
   box.checked = Boolean(values);
@@ -154,15 +150,20 @@ function effectRow(effect, values, step) {
     row.dataset.on = box.checked ? "true" : "false";
     showChain();
   });
-  toggle.append(box, document.createTextNode(effect.name));
+  toggle.append(number, box, document.createTextNode(effect.name));
 
-  row.append(number, toggle);
+  const settings = document.createElement("div");
+  settings.className = "effect-settings";
+  row.append(toggle, settings);
 
   /* Each setting is its own label and input placed directly in the row's
      grid, rather than wrapped in a box of its own. The wrapper was what
      stopped the inputs lining up: every row sized its own, so "radius" and
      "threshold" pushed their boxes to different places. */
   effect.settings.forEach((setting, index) => {
+    const pair = document.createElement("div");
+    pair.className = "setting";
+
     const label = document.createElement("label");
     label.className = "setting-label";
     /* The title, not the name: the name is the field the effect declares and
@@ -172,14 +173,9 @@ function effectRow(effect, values, step) {
     const control = settingControl(effect, setting, values && values[index]);
     label.htmlFor = control.id;
 
-    row.append(label, control);
+    pair.append(label, control);
+    settings.append(pair);
   });
-
-  /* Every row occupies the same number of grid columns, so a row with one
-     setting does not let the next row's columns slide left. */
-  for (let spare = effect.settings.length; spare < state.settingColumns; spare += 1) {
-    row.append(document.createElement("span"), document.createElement("span"));
-  }
 
   return row;
 }
@@ -192,11 +188,14 @@ function effectRow(effect, values, step) {
 function settingControl(effect, setting, value) {
   const id = `setting-${effect.name}-${setting.name}`;
 
+  const remembered = String(setting.default === null ? "" : setting.default);
+
   if (setting.kind === "choice") {
     const select = document.createElement("select");
     select.id = id;
     select.className = "setting-input";
     select.dataset.setting = setting.name;
+    select.dataset.default = remembered;
     for (const option of setting.options) {
       select.append(new Option(option, option));
     }
@@ -214,6 +213,7 @@ function settingControl(effect, setting, value) {
     box.id = id;
     box.className = "setting-flag";
     box.dataset.setting = setting.name;
+    box.dataset.default = remembered;
     box.checked = value ? value === "yes" : setting.default === "yes";
     box.addEventListener("change", showChain);
     return box;
@@ -224,6 +224,7 @@ function settingControl(effect, setting, value) {
   input.id = id;
   input.className = "setting-input";
   input.dataset.setting = setting.name;
+  input.dataset.default = remembered;
   input.value = value || "";
   /* The placeholder is the effect's own default, so an empty box is not a
      question -- it says what will happen if it is left alone. */
@@ -247,11 +248,21 @@ function updateDependents(effect) {
   tolerance.title = tolerance.disabled ? "An exact match ignores the tolerance" : "";
 }
 
-/* The value a control holds, as the text the effect would be typed with. */
+/* The value a control holds, as the text the effect would be typed with.
+
+   A value left at its default is written as nothing, which is the same rule
+   the Python side follows when it describes an effect -- and the reason the
+   line under the list reads "transparent" rather than
+   "transparent::tolerance::no". Trailing nothings are dropped by the caller,
+   so what is left is only what was actually chosen. */
 function settingValue(control) {
-  if (control.type === "checkbox") return control.checked ? "yes" : "no";
   if (control.disabled) return "";
-  return control.value.trim();
+
+  const value = control.type === "checkbox"
+    ? (control.checked ? "yes" : "no")
+    : control.value.trim();
+
+  return value === control.dataset.default ? "" : value;
 }
 
 /* What will actually run, in order, spelled the way the app would write it.
@@ -470,23 +481,37 @@ function resolveTheme(choice) {
 
 function applyTheme(choice) {
   state.theme = THEMES.includes(choice) ? choice : "system";
-  document.documentElement.dataset.theme = resolveTheme(state.theme);
+  const showing = resolveTheme(state.theme);
+  document.documentElement.dataset.theme = showing;
 
-  const label = state.theme === "system"
-    ? `System (${resolveTheme(state.theme)})`
-    : state.theme[0].toUpperCase() + state.theme.slice(1);
-  el("theme-label").textContent = label;
-  el("theme-toggle").setAttribute("aria-label", `Theme: ${label}. Click to change.`);
+  /* The button offers the other one, and says which in words -- an icon
+     alone does not, and this is the only control in the window with no
+     visible label. */
+  const offering = showing === "dark" ? "light" : "dark";
+  const words = `Switch to the ${offering} theme`;
+  el("theme-label").textContent = words;
+  el("theme-toggle").setAttribute("aria-label", words);
+  el("theme-toggle").title = words;
 }
 
-/* Only while the choice is "system" -- someone who picked dark deliberately
-   does not want it reverting at sunrise. */
+/* Only while the choice is "system" -- someone who picked a theme
+   deliberately does not want it reverting at sunrise. */
 LIGHT_QUERY.addEventListener("change", () => {
   if (state.theme === "system") applyTheme("system");
 });
 
+/* One click, the opposite of what is on screen.
+
+   It used to cycle system -> dark -> light, which from a dark desktop meant
+   the first click picked "dark" and nothing appeared to happen. What the
+   button is for is changing the theme, so it changes the theme: whatever is
+   showing, the click gives the other one.
+
+   That first click is also what ends "follow the desktop" -- before it there
+   is nothing stored and every start follows the system, after it the choice
+   is saved and is what every start uses. */
 async function toggleTheme() {
-  const next = THEMES[(THEMES.indexOf(state.theme) + 1) % THEMES.length];
+  const next = resolveTheme(state.theme) === "dark" ? "light" : "dark";
   applyTheme(next);
   await window.pywebview.api.save_theme(next);
 }

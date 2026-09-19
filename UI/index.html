@@ -16,9 +16,21 @@
         Image Convertor
       </h1>
       <div class="header-actions">
-        <span id="theme-label" class="hint">System</span>
-        <button type="button" id="theme-toggle" class="button secondary">
-          Switch theme
+        <!-- The icon shows what a click gives you, not what you have: a moon
+             on a light page, a sun on a dark one. The accessible name says it
+             in words, since an icon on its own does not. -->
+        <button type="button" id="theme-toggle" class="icon-button" title="">
+          <svg class="icon-sun" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <circle cx="12" cy="12" r="4.5"></circle>
+            <g class="sun-rays">
+              <path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2"></path>
+              <path d="M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M18.7 5.3l-1.6 1.6M6.9 17.1l-1.6 1.6"></path>
+            </g>
+          </svg>
+          <svg class="icon-moon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M20 13.5A8.2 8.2 0 1 1 10.5 4a6.6 6.6 0 0 0 9.5 9.5z"></path>
+          </svg>
+          <span id="theme-label" class="visually-hidden"></span>
         </button>
       </div>
     </header>
