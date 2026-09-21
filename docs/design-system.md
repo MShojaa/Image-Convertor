@@ -46,36 +46,49 @@ story -- which is also why running from source shows Python's icon instead.
 
 ## Colour
 
-Three greys for surfaces, three for text, one accent, three states. That is the
+Four greys for surfaces, three for text, one accent, three states. That is the
 whole palette, and it is small on purpose: a palette with a colour for every
 occasion produces a window where nothing is emphasised because everything is.
+
+The accent appears twice more as itself at low alpha -- a tint and a ring --
+rather than as two further blues. Both are written in terms of the accent, so
+changing the hue changes every place it is used at once.
 
 ### Surfaces
 
 | token | value | what it is |
 |---|---|---|
-| `--surface-sunken` | `#141517` | the window behind everything; the darkest thing on screen |
-| `--surface` | `#1c1e21` | panels, the file list, anything sitting on the window |
-| `--surface-raised` | `#26292e` | inputs, the things you can click into |
-| `--border` | `#33373d` | the line between two surfaces, when one is needed |
-| `--border-strong` | `#454a52` | a border that has to be seen: a focused input |
+| `--surface-sunken` | `#0e1013` | the window behind everything; the log and the chain strip |
+| `--surface` | `#17191e` | panels, anything sitting on the window |
+| `--surface-raised` | `#1f232a` | inputs, the things you can click into |
+| `--surface-hover` | `#262b33` | a row or a quiet button under the pointer |
+| `--border` | `#282d35` | the line between two surfaces, when one is needed |
+| `--border-strong` | `#3c444f` | a border that has to be seen: a hovered input, a scrollbar |
+| `--edge-light` | `rgba(255,255,255,0.05)` | the lit top pixel of a panel |
 
-Three levels and no more. Depth here comes from the surface getting *lighter*
-as it comes forward, which is how a dark interface does it -- shadows are
-invisible on near-black, so a raised panel that is the same colour as the one
-under it with a shadow between them reads as flat.
+Four levels and no more, and the fourth is a state rather than a layer. Depth
+here comes from the surface getting *lighter* as it comes forward, which is how
+a dark interface does it -- shadows are invisible on near-black, so a raised
+panel that is the same colour as the one under it with a shadow between them
+reads as flat.
+
+`--edge-light` is the other half of that. A one-pixel highlight across the top
+of a panel is what a light source above the window would leave, and it is the
+only thing on dark that makes a card look lifted rather than outlined. It goes
+fully transparent on light, where shadows work and a white highlight on white
+would be invisible anyway.
 
 ### Text
 
 | token | value | what it is |
 |---|---|---|
-| `--text` | `#e6e8ea` | body text, filenames, numbers |
-| `--text-dim` | `#9aa1a9` | labels, units, anything explaining something else |
-| `--text-faint` | `#6b727a` | disabled, placeholder, the parts of a path that are not the end |
+| `--text` | `#e9ebee` | body text, filenames, numbers |
+| `--text-dim` | `#9aa2ac` | labels, units, anything explaining something else |
+| `--text-faint` | `#6b7380` | disabled, placeholder, the parts of a path that are not the end |
 
-Not white. `#ffffff` on `#141517` is a contrast ratio of about 17:1, which is
+Not white. `#ffffff` on `#0e1013` is a contrast ratio of about 19:1, which is
 past the point of being readable and into the range where the text buzzes
-against the background on an OLED panel. `--text` is around 13:1 -- still far
+against the background on an OLED panel. `--text` is around 14:1 -- still far
 above the 4.5:1 that WCAG AA asks for body text, and easier to look at for the
 length of a batch.
 
@@ -88,26 +101,37 @@ label, the middle of a path whose end is what matters.
 
 | token | value | what it is |
 |---|---|---|
-| `--accent` | `#5b9dd9` | the primary button, focus rings, the progress bar |
-| `--accent-hover` | `#72adde` | that, hovered |
-| `--accent-text` | `#0d1117` | text *on* the accent -- dark, because the accent is light |
+| `--accent` | `#5aa2f5` | the primary button, focus rings, the progress bar, the heading rules |
+| `--accent-hover` | `#7bb5f8` | that, hovered; and the far end of the progress bar |
+| `--accent-text` | `#0b1220` | text *on* the accent -- dark, because the accent is light |
+| `--accent-soft` | the accent at `0.14` | the tint behind a ticked effect, the chosen theme, the corner wash |
+| `--accent-ring` | the accent at `0.32` | the halo on a focused control, the border of a tinted thing |
 
 One accent. The Convert button is the only primary action in the window, so it
-is the only thing that gets it.
+is the only thing that gets it *solid* -- and the only thing wearing
+`--shadow-accent`, which is what makes the glow mean "this is the button".
+
+The two alpha tokens are the accent doing the work a second and third grey used
+to do: a ticked effect row, the chosen theme button, a focus halo. Because they
+are the accent rather than beside it, nothing has to be re-picked when the hue
+changes; and because they are alpha rather than mixed, they sit correctly on
+whichever surface they land on in either theme.
 
 ### States
 
 | token | value | what it is |
 |---|---|---|
-| `--good` | `#5cb176` | a run that finished with nothing to report |
-| `--warn` | `#d6a14a` | the "could not shrink" warnings, and refused pairings |
-| `--bad` | `#d97070` | a file that failed |
+| `--good` | `#5ec08a` | a run that finished with nothing to report |
+| `--warn` | `#e0b054` | the "could not shrink" warnings, and refused pairings |
+| `--bad` | `#ec7f7f` | a file that failed |
 
 Muted rather than saturated, for the same reason the text is not white: a pure
 red on a near-black panel vibrates. These are the only three colours in the
 window that carry meaning by being a colour, so each one is also said in words
 -- a count, a filename, a sentence. Nothing in this app is communicated by
-colour alone.
+colour alone. In the log each kind also carries a two-pixel bar down its left
+edge, so a scrolled-back run shows *where* the trouble is as a shape before any
+of it is read.
 
 ## Type
 
@@ -122,12 +146,20 @@ One family, four sizes, three weights.
 | `--text-sm` | `0.8125rem` (13px) | labels, the log |
 | `--text-xs` | `0.75rem` (12px) | units, counts |
 | `--weight-normal` | `400` | body |
-| `--weight-medium` | `500` | labels, buttons |
-| `--weight-bold` | `600` | the heading |
+| `--weight-medium` | `500` | buttons |
+| `--weight-bold` | `600` | the heading, the panel labels |
+| `--track-label` | `0.06em` | the tracking on an uppercase panel label |
 
 System fonts, deliberately: this is a Windows desktop tool and it should look
 like one. A webfont would be a download, a flash of unstyled text, and one more
 thing to get into the frozen build.
+
+Panel labels are 12px uppercase, bold, and tracked out by `--track-label`.
+Uppercase text set at its default spacing reads as a block rather than as
+words, and at this size a label needs to be scannable more than it needs to be
+large. The heading, the only line of big type in the window, goes the other way
+with slightly negative tracking -- default spacing looks loose beside the tight
+labels under it.
 
 **Filenames and sizes are monospace.** A list of files scanned down the left
 edge is easier to read when the characters line up, and `128x64` next to
@@ -153,22 +185,51 @@ is a layout that has not been decided yet.
 
 | token | value | for |
 |---|---|---|
-| `--radius` | `6px` | inputs, buttons, panels |
-| `--radius-sm` | `4px` | chips, the progress bar |
-| `--control-height` | `32px` | every input, select and button |
+| `--radius` | `10px` | panels |
+| `--radius-sm` | `7px` | inputs, buttons, effect rows, the log |
+| `--radius-pill` | `999px` | the theme switcher, the progress bar, scrollbars |
+| `--control-height` | `34px` | every input, select and button |
 
 One height for every control is what makes a row of them line up without a
-single per-control adjustment.
+single per-control adjustment. 34px rather than 32 because a 14px label inside
+a 32px box leaves four pixels above and below, which is the difference between
+a control and a cell in a table.
+
+Two radii, not one: the container is rounder than the things inside it. A panel
+and its inputs at the same radius read as one nested box; ten against seven
+reads as a card with contents in it. `--radius-pill` is for the things that are
+genuinely round -- a segmented control, a bar, a scrollbar thumb -- and never
+for a box.
+
+### Shadow
+
+| token | for |
+|---|---|
+| `--shadow-sm` | the resting lift on a panel, the switcher, the logo |
+| `--shadow-md` | anything that floats over the window |
+| `--shadow-accent` | the Convert button, and only that |
+
+Defined per theme, not shared. On dark a shadow is nearly invisible and only
+softens an edge, so `--edge-light` does the lifting; on light the shadow *is*
+the lifting and the highlight is switched off. Both sets live in their theme
+block for that reason.
 
 ## Motion
 
 | token | value | for |
 |---|---|---|
 | `--fast` | `120ms` | hover, focus, a button press |
-| `--slow` | `240ms` | a panel appearing, the log scrolling |
+| `--slow` | `240ms` | the progress bar advancing |
+| `--ease` | `cubic-bezier(0.2, 0.8, 0.3, 1)` | all of it |
 
-Both `ease-out`. Nothing in this window animates for longer than that, and
-nothing animates position -- a control that slides is a control you wait for.
+One curve, and it leaves fast and settles slow. That is the difference between
+a control that moves and one that responds -- a plain `ease-out` starts gently,
+which at 120ms reads as lag.
+
+Nothing in this window animates for longer than 240ms, and the only thing that
+animates position is a button moving one pixel down while it is held, which is
+a press rather than a transition. A control that slides is a control you wait
+for.
 
 **All of it is off under `prefers-reduced-motion`.** One media query at the
 bottom of the stylesheet sets every duration to `0.01ms`, which is the
@@ -308,9 +369,9 @@ three rules this file set out before either existed all held:
    `tests/test_theme.py`, which strips the two token blocks and fails on any
    hex value, named colour or `rgb()` left in what remains.
 2. **The light theme is not an inversion.** No token has the same value in both.
-   The accent is the clearest case: `#5b9dd9` is 2.6:1 on white, fine as a block
+   The accent is the clearest case: `#5aa2f5` is 2.4:1 on white, fine as a block
    behind dark text and nowhere near readable as the focus ring and button text
-   it also has to be, so light uses `#2a6fb0`.
+   it also has to be, so light uses `#1f6feb`.
 3. **The depth rule flips.** On dark the raised surface is the lightest; on
    light the sunken one is the grey and the raised one is white, with borders
    doing the work shadows do elsewhere. Also asserted, in both directions.
