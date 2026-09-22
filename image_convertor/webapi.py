@@ -62,18 +62,68 @@ class Api:
     def __init__(self, base: Path) -> None:
         self._base = base
         self._window = None
+        self._frame = None
         self._cancel = threading.Event()
         self._running = False
         self._choosing = False
 
-    def attach(self, window: object) -> None:
+    def attach(self, window: object, frame: object = None) -> None:
         """Give the Api its window, once create_window has made one.
 
         A method rather than an attribute the caller sets, so that the name it
         is stored under stays this file's business -- and this file is where
         the reason for that name is written down.
+
+        `frame` is the platform's answer to having no titlebar -- whether the
+        window is maximized, and what to do before maximizing it. Optional,
+        because everything here works without it; only the titlebar buttons
+        are duller.
         """
         self._window = window
+        self._frame = frame
+
+    # -- the titlebar the page draws itself --------------------------------
+
+    def window_minimize(self) -> dict:
+        """Minimize. The page has no other way to ask."""
+        if self._window is None:
+            return _fail("No window yet.")
+        self._window.minimize()
+        return _ok()
+
+    def window_toggle_maximize(self) -> dict:
+        """Maximize, or put it back.
+
+        Whether it is maximized is asked of the platform rather than
+        remembered: the window can be maximized without going through this app
+        -- Aero Snap, a drag to the top edge, Win+Up -- and a remembered flag
+        would be wrong from then on.
+        """
+        if self._window is None:
+            return _fail("No window yet.")
+
+        if self._maximized():
+            self._window.restore()
+        else:
+            if self._frame is not None:
+                # Per monitor, so it is said again every time.
+                self._frame.before_maximize()
+            self._window.maximize()
+
+        return _ok(maximized=self._maximized())
+
+    def window_close(self) -> dict:
+        if self._window is None:
+            return _fail("No window yet.")
+        self._window.destroy()
+        return _ok()
+
+    def window_state(self) -> dict:
+        """What the maximize button should be drawing."""
+        return _ok(maximized=self._maximized())
+
+    def _maximized(self) -> bool:
+        return bool(self._frame is not None and self._frame.is_maximized())
 
     # -- what the page needs to draw itself -------------------------------
 

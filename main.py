@@ -20,6 +20,7 @@ import webview
 
 from image_convertor import __version__
 from image_convertor.webapi import Api
+from image_convertor.window_frame import WindowFrame
 
 WINDOW_TITLE = "Image Convertor"
 
@@ -33,9 +34,9 @@ WANTED_SIZE = (1220, 860)
 # does not collapse into a column of squeezed panels.
 MIN_SIZE = (720, 560)
 
-# Left for the taskbar and the window's own titlebar and borders, in the same
-# logical pixels as everything else here. webview reports the whole screen, not
-# the work area, so a window sized to the full height would have its bottom edge
+# Left for the taskbar and the window's own borders, in the same logical
+# pixels as everything else here. webview reports the whole screen, not the
+# work area, so a window sized to the full height would have its bottom edge
 # behind the taskbar -- and the Convert button is at the bottom.
 SCREEN_MARGIN = (64, 96)
 
@@ -135,12 +136,33 @@ def main(argv: list[str] | None = None) -> int:
         width=width,
         height=height,
         min_size=MIN_SIZE,
+        # No OS titlebar: the page draws its own, which is the only way the
+        # window can be the app's colour rather than a strip of someone
+        # else's chrome above it.
+        frameless=True,
+        # Off, and this one matters. On -- which is the default -- a mousedown
+        # anywhere on the page drags the window, so selecting the text of a
+        # path or a log line moves the window instead. pywebview drags from
+        # whatever carries `pywebview-drag-region`, which is the titlebar and
+        # nothing else.
+        easy_drag=False,
     )
+
+    # What framelessness takes away and this puts back: the resize border, and
+    # a maximize that stops at the taskbar. The platform knowledge lives in
+    # window_frame.py; webapi.py stays a file about this app.
+    frame = WindowFrame(window)
+    window.events.shown += frame.settle
+    # Which screen the window is on decides how big "maximized" may be, and a
+    # move is when that changes. On the GUI thread, which is the only one the
+    # form may be touched from.
+    window.events.moved += frame.follow_monitor
+
     # The Api needs the window to open a folder dialog and to call into the
     # page, and create_window is the only place it exists. It goes on a private
     # attribute deliberately -- see the note in Api.__init__, which is the
     # difference between a working window and one that says Not Responding.
-    api.attach(window)
+    api.attach(window, frame)
 
     webview.start(debug=args.debug)
     return 0

@@ -34,6 +34,11 @@
   --warn: #e0b054;
   --bad: #ec7f7f;
 
+  /* The close button's hover, and deliberately not from the palette above:
+     every other window on this desktop has a red close button. */
+  --danger: #c42b1c;
+  --danger-text: #ffffff;
+
   --font: system-ui, "Segoe UI Variable", "Segoe UI", sans-serif;
   --font-mono: "Cascadia Mono", "Consolas", ui-monospace, monospace;
   --text-lg: 1.0625rem;
@@ -116,6 +121,9 @@
   --warn: #8a5d10;
   --bad: #b23b3b;
 
+  --danger: #c42b1c;
+  --danger-text: #ffffff;
+
   --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.06);
   --shadow-md: 0 10px 28px -12px rgba(16, 24, 40, 0.22);
   --shadow-accent: 0 6px 16px -8px rgba(31, 111, 235, 0.55);
@@ -137,6 +145,9 @@ body {
 
 body {
   margin: 0;
+  /* A fixed titlebar strip, and the app filling what is left of the window. */
+  display: flex;
+  flex-direction: column;
   background: var(--surface-sunken);
   color: var(--text);
   font-family: var(--font);
@@ -155,11 +166,12 @@ body {
 }
 
 #app {
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
   padding: var(--space-3) var(--space-4) var(--space-4);
-  height: 100%;
 }
 
 /* Scrollbars, so the log and the controls column do not put a strip of
@@ -185,43 +197,115 @@ body {
   background-clip: content-box;
 }
 
-/* -- header ------------------------------------------------------------ */
+/* -- the titlebar ------------------------------------------------------ */
 
-.app-header {
+/* Flush to the top of the window, full width, buttons in the corner -- which
+   is the whole point of drawing it rather than letting the OS draw one. It
+   sits outside #app so the page's padding does not inset it. */
+.titlebar {
+  flex: none;
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-  padding: var(--space-1) var(--space-1) var(--space-2);
+  align-items: stretch;
+  height: 32px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  /* Nothing in a titlebar is text worth selecting, and selecting it while
+     dragging the window is how that would show up. */
+  user-select: none;
 }
 
-.app-header h1 {
-  margin: 0;
+/* The half pywebview drags the window from. It takes the slack, so the empty
+   middle of the bar drags and the buttons on the right do not. */
+.titlebar-grip {
+  flex: 1;
   display: flex;
   align-items: center;
-  gap: var(--space-3);
-  font-size: var(--text-lg);
-  font-weight: var(--weight-bold);
-  /* Negative tracking on the one line of large type: at this size the default
-     spacing reads loose beside the tight uppercase labels below it. */
-  letter-spacing: -0.01em;
+  gap: var(--space-2);
+  padding-left: var(--space-3);
+  min-width: 0;
 }
+
+.titlebar-title {
+  font-size: var(--text-xs);
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.titlebar-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding-left: var(--space-2);
+}
+
+.window-buttons {
+  display: flex;
+  align-items: stretch;
+}
+
+/* 46px wide and the full height of the bar, which is what Windows uses: the
+   target reaches the very corner of the screen when maximized, and a corner
+   is the easiest thing on a screen to hit. */
+.window-button {
+  width: 46px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: background var(--fast) ease-out, color var(--fast) ease-out;
+}
+
+.window-button:hover {
+  background: var(--surface-raised);
+  color: var(--text);
+}
+
+.window-button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+/* The one place a fixed colour is right: every other window on this desktop
+   has a red close button, and matching that is worth more than matching
+   ourselves. */
+.window-button.close:hover {
+  background: var(--danger);
+  color: var(--danger-text);
+}
+
+.window-button svg {
+  width: 12px;
+  height: 12px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.1;
+  stroke-linecap: square;
+}
+
+/* One button, two pictures: a square to maximize, two stacked to put it back.
+   Which one shows follows the window rather than the click, so a window
+   maximized by Aero Snap draws the right one too. */
+.icon-restore { display: none; }
+
+body[data-maximized="true"] .icon-maximize { display: none; }
+body[data-maximized="true"] .icon-restore { display: inline; }
 
 /* Drawn at 96px and shown at 28, so it stays sharp on a 200% display. The
    mark carries its own white panel and blue tile, so it needs no background
    of its own and looks the same in both themes. */
+/* Drawn at 96px and shown at 18, so it stays sharp on a 200% display. */
 .logo {
-  width: 28px;
-  height: 28px;
-  border-radius: var(--radius-sm);
+  width: 18px;
+  height: 18px;
+  border-radius: 3px;
   flex: none;
-  box-shadow: var(--shadow-sm);
-}
-
-.header-actions {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
 }
 
 /* The two columns. Stacked by default -- a narrow window has no width to

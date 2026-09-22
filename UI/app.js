@@ -54,6 +54,8 @@ async function start() {
   state.defaultOutputFolder = info.default_output_folder;
   setOutputFolder(info.output_folder);
 
+  watchWindowState();
+
   wire();
 }
 
@@ -69,6 +71,15 @@ function wire() {
   }
   el("theme-switcher").addEventListener("keydown", themeKeys);
   el("reveal").addEventListener("click", revealOutput);
+
+  el("window-minimize").addEventListener("click", () => window.pywebview.api.window_minimize());
+  el("window-maximize").addEventListener("click", toggleMaximize);
+  el("window-close").addEventListener("click", () => window.pywebview.api.window_close());
+
+  /* Double-clicking a titlebar maximizes it. Every other window on this
+     desktop does, and the one that does not feels broken rather than
+     minimal. */
+  document.querySelector(".titlebar-grip").addEventListener("dblclick", toggleMaximize);
   el("format").addEventListener("change", showFormatNote);
 
   /* Validated as it is typed, by the same parser the conversion uses, so the
@@ -463,6 +474,39 @@ function fail(message) {
   setSummary(message, "bad");
   log(message, "bad");
 }
+
+/* -- the window's own titlebar ------------------------------------------- */
+
+async function toggleMaximize() {
+  const answer = await window.pywebview.api.window_toggle_maximize();
+  if (!answer.ok) return fail(answer.error);
+  showMaximized(answer.maximized);
+}
+
+/* Which picture the maximize button draws. Kept on <body> rather than on the
+   button, because it is a fact about the window and the CSS reads better for
+   it. */
+function showMaximized(maximized) {
+  document.body.dataset.maximized = String(Boolean(maximized));
+  const button = el("window-maximize");
+  const words = maximized ? "Restore" : "Maximize";
+  button.title = words;
+  button.setAttribute("aria-label", words);
+}
+
+/* The window can be maximized without going through this app at all -- Aero
+   Snap, a drag to the top edge, Win+Up -- so the button follows the window
+   rather than the click. A resize is the one event all of those share. */
+async function watchWindowState() {
+  const answer = await window.pywebview.api.window_state();
+  if (answer.ok) showMaximized(answer.maximized);
+}
+
+let resizeSettling = null;
+window.addEventListener("resize", () => {
+  clearTimeout(resizeSettling);
+  resizeSettling = setTimeout(watchWindowState, 120);
+});
 
 /* -- theme --------------------------------------------------------------- */
 

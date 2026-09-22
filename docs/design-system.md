@@ -265,6 +265,52 @@ focus never changes an element's size and nothing shifts when you tab through.
 appears for the keyboard and not for the mouse, but there is no rule anywhere
 that sets `outline: none` without putting something else in its place.
 
+### The titlebar
+
+**The window has no OS titlebar.** `main.py` passes `frameless=True`, and the
+bar across the top of the page is the only one there is: the app's own colour
+all the way to the top edge, rather than a strip of someone else's chrome above
+a dark page.
+
+It is 32px, `--surface`, with a border under it. The left half carries the mark
+and the name and is the **drag region** -- `pywebview-drag-region`, which is
+what pywebview moves the window from. The right half carries the theme switcher
+and then the window buttons, and is deliberately *not* draggable: a button you
+can accidentally drag the window with is a button that sometimes does nothing.
+
+Double-clicking the drag region maximizes, because every other window on this
+desktop does and the one that does not feels broken rather than minimal.
+
+**The buttons are 46px wide and the full height of the bar**, which is what
+Windows uses: maximized, the target reaches the very corner of the screen, and
+a corner is the easiest thing on a screen to hit. Minimize, maximize, close, in
+that order, for the same reason.
+
+**Close goes red on hover, and that red is the same in both themes.** It is the
+one place a fixed colour is right -- every other window on this desktop has a
+red close button, and matching the convention is worth more than being
+internally consistent. `tests/test_theme.py` knows about the exemption and
+would make anyone adding a second one say why.
+
+The maximize button draws a square or two stacked squares, and **which one
+follows the window rather than the click** -- a window maximized by Aero Snap,
+a drag to the top edge, or Win+Up draws the right one too, because the page
+asks after every resize rather than remembering what it last did.
+
+### Three things framelessness breaks
+
+All measured, and all in `image_convertor/window_frame.py` with the numbers:
+
+- **The resize border goes with the titlebar.** `FormBorderStyle.None` leaves
+  the window without `WS_THICKFRAME`, and a hit test on the corner comes back
+  `HTCLIENT` -- nothing to drag, so the window cannot be resized at all. Adding
+  that one style bit back, with the caption still off, restores every edge.
+- **A borderless window maximizes over the taskbar**, because Windows hands a
+  bordered window the work area and a borderless one the whole screen. Measured
+  at 1928x1088 against a work area of 1920x1020 -- the bottom 68 pixels,
+  including the Convert button, behind the taskbar. `MaximizedBounds` fixes it.
+- **That bound is per monitor**, so it is set again whenever the window moves.
+
 ### The theme switcher
 
 A pill with three choices in it -- system, light, dark, as a monitor, a sun and
@@ -445,8 +491,5 @@ Windows clamped it, the page opened shorter than it needed, and it scrolled.
 
 ## What this file does not cover
 
-The window frame, the titlebar and the menu bar are the OS's, and the app does
-not draw them. There is no dark-mode titlebar API being used and no frameless
-window -- a window with a light titlebar over a dark page looks unfinished, and
-the fix for it is a piece of work with its own failure modes that has not been
-argued for here.
+The menu bar -- there isn't one -- and the window's drop shadow, which Windows
+draws. Everything else inside the window is here.
