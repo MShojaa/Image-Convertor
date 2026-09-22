@@ -169,6 +169,15 @@ edge is easier to read when the characters line up, and `128x64` next to
 
 A 4px scale. Every margin, padding and gap in the stylesheet is one of these.
 
+**Height is the scarce one, and the scale is not the budget.** A 1080p laptop
+at 125% scaling is 864 logical pixels tall and `main.py` sizes the window for
+it; every vertical pixel a panel spends is a pixel the log does not get. The
+refresh learned this the expensive way -- moving the panels from `--space-2` to
+`--space-3` padding and gaps, one step on the scale, put 852px of controls into
+708px of room at that window size and hung a scrollbar down the one column that
+should never need one. The panels are back at `--space-2` vertically. Colour,
+shape and state carry the look; padding does not.
+
 | token | value |
 |---|---|
 | `--space-1` | `4px` |
@@ -206,8 +215,10 @@ for a box.
 | token | for |
 |---|---|
 | `--shadow-sm` | the resting lift on a panel, the switcher, the logo |
-| `--shadow-md` | anything that floats over the window |
 | `--shadow-accent` | the Convert button, and only that |
+
+Two, and there is no third: nothing in this window floats over anything, so a
+token for that was written, used nowhere, and taken out again.
 
 Defined per theme, not shared. On dark a shadow is nearly invisible and only
 softens an edge, so `--edge-light` does the lifting; on light the shadow *is*

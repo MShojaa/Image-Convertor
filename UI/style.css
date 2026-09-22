@@ -63,10 +63,10 @@
   --radius-pill: 999px;
   --control-height: 34px;
 
-  /* Two steps only: resting, and the accent's own glow under the one primary
-     button. A third would be a difference nobody can name. */
+  /* Two, and only one of them is a step: a resting lift, and the accent's
+     own glow under the one primary button. Nothing in this window floats
+     over anything, so there is no third. */
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
-  --shadow-md: 0 8px 24px -8px rgba(0, 0, 0, 0.55);
   --shadow-accent: 0 6px 16px -8px rgba(90, 162, 245, 0.7);
 
   --fast: 120ms;
@@ -125,7 +125,6 @@
   --danger-text: #ffffff;
 
   --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.06);
-  --shadow-md: 0 10px 28px -12px rgba(16, 24, 40, 0.22);
   --shadow-accent: 0 6px 16px -8px rgba(31, 111, 235, 0.55);
 
   color-scheme: light;
@@ -165,13 +164,19 @@ body {
   background-attachment: fixed;
 }
 
+/* Height is the scarce one -- 1080p at 125% scaling is 864 logical pixels,
+   and main.py sizes for it. Every vertical pixel of padding in this file is
+   spent out of the log, so the rhythm stays tight and the refresh lives in
+   colour, shape and state instead. Measured: at 1220x768 the controls column
+   is 627px of content in 708px of room. It used to be 767 in 708, which is a
+   scrollbar down the one column that should never need one. */
 #app {
   flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
-  padding: var(--space-3) var(--space-4) var(--space-4);
+  gap: var(--space-2);
+  padding: var(--space-3);
 }
 
 /* Scrollbars, so the log and the controls column do not put a strip of
@@ -316,13 +321,13 @@ body[data-maximized="true"] .icon-restore { display: inline; }
   min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
+  gap: var(--space-2);
 }
 
 .controls {
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
+  gap: var(--space-2);
   /* Shrinkable, and scrolling inside itself when it has to. Without this a
      short window pushes the Convert button off the bottom instead: the
      controls are as tall as their contents and something has to give. */
@@ -437,10 +442,10 @@ body[data-maximized="true"] .icon-restore { display: inline; }
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: var(--space-3) var(--space-4) var(--space-4);
+  padding: var(--space-2) var(--space-4) var(--space-3);
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
+  gap: var(--space-2);
   box-shadow: var(--shadow-sm);
 }
 
@@ -642,7 +647,7 @@ body[data-maximized="true"] .icon-restore { display: inline; }
   grid-template-columns: 9.5rem minmax(0, 1fr);
   align-items: center;
   gap: var(--space-2);
-  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
+  padding: var(--space-1) var(--space-2) var(--space-1) var(--space-3);
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
   transition:
@@ -659,6 +664,15 @@ body[data-maximized="true"] .icon-restore { display: inline; }
 .effect[data-on="true"] {
   background: var(--accent-soft);
   border-color: var(--accent-ring);
+}
+
+/* Hover has to survive being ticked. `.effect:hover` and
+   `.effect[data-on="true"]` have the same specificity and the tint is written
+   second, so it won -- and a ticked row was the one row in the list that did
+   not answer the pointer. The border answers here instead; the background is
+   already spoken for. */
+.effect[data-on="true"]:hover {
+  border-color: var(--accent);
 }
 
 .effect[data-on="true"]::before {
@@ -784,21 +798,17 @@ select.setting-input {
   background: var(--surface);
 }
 
-/* What the run will do, in order, as one line of code-ish text. Set on the
-   sunken surface so it reads as output -- the same surface the log uses, for
-   the same reason -- rather than as one more hint. */
+/* What the run will do, in order, as one line of code-ish text.
+
+   It was a bordered strip on the sunken surface, and that read well and moved
+   the panel: app.js empties it when nothing is ticked, so the first tick grew
+   the Effects panel and pushed everything below it down -- the exact thing
+   the effect rows are laid out to avoid. Plain text with its line reserved
+   cannot do that, and costs no height. */
 .chain {
   color: var(--text-dim);
   min-height: 1.2em;
-  padding: var(--space-2) var(--space-3);
-  border-radius: var(--radius-sm);
-  background: var(--surface-sunken);
-  border: 1px solid var(--border);
 }
-
-/* Before the first tick there is no chain, and an empty strip is a box with
-   nothing in it asking to be read. */
-.chain:empty { display: none; }
 
 /* -- progress ---------------------------------------------------------- */
 
@@ -841,9 +851,9 @@ select.setting-input {
   background: var(--surface-sunken);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  padding: var(--space-3);
+  padding: var(--space-2);
   font-size: var(--text-sm);
-  line-height: 1.6;
+  line-height: 1.5;
   color: var(--text-dim);
   white-space: pre-wrap;
   word-break: break-word;
