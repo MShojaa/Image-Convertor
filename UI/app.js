@@ -72,9 +72,9 @@ function wire() {
   el("theme-switcher").addEventListener("keydown", themeKeys);
   el("reveal").addEventListener("click", revealOutput);
 
-  el("window-minimize").addEventListener("click", () => window.pywebview.api.window_minimize());
-  el("window-maximize").addEventListener("click", toggleMaximize);
-  el("window-close").addEventListener("click", () => window.pywebview.api.window_close());
+  captionButton("window-minimize", () => window.pywebview.api.window_minimize());
+  captionButton("window-maximize", toggleMaximize);
+  captionButton("window-close", () => window.pywebview.api.window_close());
 
   /* Double-clicking a titlebar maximizes it. Every other window on this
      desktop does, and the one that does not feels broken rather than
@@ -476,6 +476,25 @@ function fail(message) {
 }
 
 /* -- the window's own titlebar ------------------------------------------- */
+
+/* A caption button, wired up and told to let go afterwards.
+
+   Clicking maximize left the button focused, and the window coming back from
+   the resize is enough for Chromium to call that focus visible -- so a bright
+   ring sat on the button until something else was clicked. No other window on
+   this desktop does that.
+
+   `detail` is how the press arrived: a mouse click counts the clicks and a
+   keyboard activation reports 0. So the pointer drops focus and the keyboard
+   keeps it, which is the only way round that serves both.
+*/
+function captionButton(id, act) {
+  const button = el(id);
+  button.addEventListener("click", (event) => {
+    if (event.detail > 0) button.blur();
+    act();
+  });
+}
 
 async function toggleMaximize() {
   const answer = await window.pywebview.api.window_toggle_maximize();

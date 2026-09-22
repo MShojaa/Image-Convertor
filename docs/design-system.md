@@ -297,6 +297,25 @@ Windows uses: maximized, the target reaches the very corner of the screen, and
 a corner is the easiest thing on a screen to hit. Minimize, maximize, close, in
 that order, for the same reason.
 
+Full height is easy to write down and easy to lose. `align-items: center` on
+the actions strip made the row of buttons as tall as its own content -- 12px of
+icon -- so they were 46x12 in a 32px bar, floating in the middle of it and
+touching no edge at all. The strip stretches; the switcher centres itself.
+
+**The glyphs are 12px on a 1px stroke**, on the half-pixel coordinates their
+paths already use. They were 1.1, which straddles two device pixels at 125%
+scaling: soft glyphs next to the crisp ones Windows draws on every other
+window, which reads as wrong rather than as different.
+
+**A caption button lets go of focus when the pointer presses it.** Clicking
+maximize left the button focused, and the window returning from the resize is
+enough for Chromium to call that focus visible -- so a ring sat on the button
+until something else was clicked, which no other window on this desktop does.
+`event.detail` is how the press arrived: a mouse click counts clicks, a
+keyboard activation reports 0. The pointer drops focus, the keyboard keeps it.
+The ring itself is 1px, inset -- a caption button is chrome, and the 2px accent
+box a form control wears reads as a selected cell up here.
+
 **Close goes red on hover, and that red is the same in both themes.** It is the
 one place a fixed colour is right -- every other window on this desktop has a
 red close button, and matching the convention is worth more than being
@@ -321,6 +340,11 @@ All measured, and all in `image_convertor/window_frame.py` with the numbers:
   at 1928x1088 against a work area of 1920x1020 -- the bottom 68 pixels,
   including the Convert button, behind the taskbar. `MaximizedBounds` fixes it.
 - **That bound is per monitor**, so it is set again whenever the window moves.
+- **The style bit that restores the edges also draws them.** The grab areas are
+  invisible, but DWM still draws the window's border around them -- a line
+  outside a window that is otherwise the app's own colour to its edge.
+  `DWMWA_BORDER_COLOR` set to `DWMWA_COLOR_NONE` turns it off. Windows 11 or
+  nothing: on 10 the attribute is unknown, the call fails, and the border stays.
 
 ### The theme switcher
 
@@ -328,6 +352,14 @@ A pill with three choices in it -- system, light, dark, as a monitor, a sun and
 a moon -- with the chosen one ringed. **All three are on screen at once**, so
 which theme is set and what the alternatives are can both be read without
 pressing anything.
+
+**It is 24px, not `--control-height`.** It used to be a form control in a page
+header beside the panels, and it kept that height when it moved into the
+titlebar -- where `--control-height` is 34px and the bar is 32, so the pill hung
+a pixel above the top edge of the window and a pixel through the bar's own
+bottom border. Up here it is chrome and it sizes to the bar. The lesson is the
+general one: `--control-height` is the height of a control in a panel, and the
+titlebar is not a panel.
 
 It replaced a single button that cycled through the three. Two things were
 wrong with that: from a dark desktop the first press picked "dark" and nothing

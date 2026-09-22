@@ -238,9 +238,14 @@ body {
   text-overflow: ellipsis;
 }
 
+/* Stretch, not centre. `align-items: center` here made .window-buttons as
+   tall as its own content -- 12px of icon -- so the three buttons were 46x12
+   in a 32px bar: not full height, not reaching the top edge, and nowhere near
+   the corner of the screen when maximized, which is the whole reason they are
+   46 wide. The switcher centres itself instead. */
 .titlebar-actions {
   display: flex;
-  align-items: center;
+  align-items: stretch;
   gap: var(--space-2);
   padding-left: var(--space-2);
 }
@@ -272,9 +277,13 @@ body {
   color: var(--text);
 }
 
+/* Inside the button and one pixel wide. A 2px accent box inset in a caption
+   button reads as a selected cell, and it is what was left on screen after a
+   click on maximize -- app.js drops focus after a pointer press, so this is
+   now only ever seen by the keyboard, which is who it is for. */
 .window-button:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: -2px;
+  outline: 1px solid var(--accent);
+  outline-offset: -3px;
 }
 
 /* The one place a fixed colour is right: every other window on this desktop
@@ -285,12 +294,16 @@ body {
   color: var(--danger-text);
 }
 
+/* A whole pixel, on the half-pixel coordinates the paths already use. 1.1
+   straddles two device pixels at 125% scaling and the glyphs came out soft --
+   which, next to the crisp ones Windows draws on every other window, is what
+   made them look wrong rather than merely different. */
 .window-button svg {
   width: 12px;
   height: 12px;
   fill: none;
   stroke: currentColor;
-  stroke-width: 1.1;
+  stroke-width: 1;
   stroke-linecap: square;
 }
 
@@ -356,13 +369,19 @@ body[data-maximized="true"] .icon-restore { display: inline; }
   }
 }
 
-/* Three choices in a pill, the chosen one tinted. Same height as every
-   other control, so the header lines up with the panels below it. */
+/* Three choices in a pill, the chosen one tinted.
+
+   It used to be --control-height, from when it sat in a page header beside
+   the panels. In the titlebar that is wrong twice over: --control-height is
+   34px and the bar is 32, so the pill hung a pixel above the top edge of the
+   window and a pixel through the bar's bottom border. It is chrome now, and
+   it sizes to the bar. */
 .theme-switcher {
+  align-self: center;
   display: inline-flex;
   align-items: center;
   gap: var(--space-1);
-  height: var(--control-height);
+  height: 24px;
   padding: 0 var(--space-1);
   border: 1px solid var(--border);
   /* Fully round: it is a group of round choices, not a row of boxes. */
@@ -372,8 +391,8 @@ body[data-maximized="true"] .icon-restore { display: inline; }
 }
 
 .theme-choice {
-  width: 26px;
-  height: 26px;
+  width: 20px;
+  height: 20px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -409,8 +428,8 @@ body[data-maximized="true"] .icon-restore { display: inline; }
 }
 
 .theme-choice svg {
-  width: 15px;
-  height: 15px;
+  width: 13px;
+  height: 13px;
   fill: none;
   stroke: currentColor;
   stroke-width: 1.8;

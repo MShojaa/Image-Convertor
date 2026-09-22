@@ -22,6 +22,14 @@ button -- sat behind the taskbar. `MaximizedBounds` is the documented answer.
 rather than once at startup. A window moved to a second screen with a
 different taskbar would otherwise be given the first screen's rectangle.
 
+**Putting `WS_THICKFRAME` back brings a visible frame with it.** The grab areas
+are invisible, but DWM still draws the window's border around them -- a line in
+the accent colour of whoever's theme is running, or black, outside a window
+that is otherwise the app's own colour to its edge. `DWMWA_BORDER_COLOR` is the
+one attribute that turns it off, and it is Windows 11 or nothing: on 10 the
+call returns a failure HRESULT and the border stays, which is how it looked
+before this existed.
+
 Everything here is a no-op off Windows, so the app still runs on another
 machine -- with an ordinary titlebar, which is the right fallback.
 """
@@ -34,6 +42,12 @@ import sys
 GWL_STYLE = -16
 WS_THICKFRAME = 0x00040000
 WS_MINIMIZEBOX = 0x00020000
+
+# Windows 11 (build 22000) and later. DWMWA_COLOR_NONE is the documented
+# "draw no border at all", as distinct from drawing one in no particular
+# colour.
+DWMWA_BORDER_COLOR = 34
+DWMWA_COLOR_NONE = 0xFFFFFFFE
 
 SWP_NOMOVE = 0x0002
 SWP_NOSIZE = 0x0001
@@ -71,6 +85,7 @@ class WindowFrame:
 
         self._handle = self._native_handle()
         self._restore_sizing_border()
+        self._hide_frame_border()
         self.before_maximize()
 
     def _native_handle(self) -> int:
@@ -125,6 +140,34 @@ class WindowFrame:
             0,
             SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED,
         )
+
+    def _hide_frame_border(self) -> None:
+        """Stop DWM drawing a border around the window.
+
+        `WS_THICKFRAME` is what makes the edges draggable and it is also what
+        makes them visible: the window came up with a line drawn around it,
+        outside a titlebar that is otherwise the app's own colour to the very
+        top edge. The style bit has to stay -- without it there is no resizing
+        at all -- so the border is turned off at the compositor instead.
+
+        Windows 11 only. On 10 the attribute is unknown, the call returns a
+        failure HRESULT, and the border stays: the same window as before.
+        """
+        if not self._handle:
+            return
+
+        try:
+            colour = ctypes.c_uint(DWMWA_COLOR_NONE)
+            ctypes.windll.dwmapi.DwmSetWindowAttribute(
+                ctypes.c_void_p(self._handle),
+                ctypes.c_uint(DWMWA_BORDER_COLOR),
+                ctypes.byref(colour),
+                ctypes.sizeof(colour),
+            )
+        except Exception:
+            # Worth trying and not worth failing over, the same as the
+            # maximized bounds: a border is ugly rather than fatal.
+            pass
 
     # -- called before every maximize --------------------------------------
 
