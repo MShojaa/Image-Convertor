@@ -154,6 +154,11 @@ complaining.
 
 ## Dark and light
 
+The window draws its own titlebar rather than using the OS one, so the app is
+its own colour to the top edge. It drags, double-click maximizes, and the
+buttons are where Windows puts them. Resizing from the edges, snapping, and
+maximizing all work as usual.
+
 The switcher in the corner has all three: **system**, **light** and **dark**,
 as a monitor, a sun and a moon, with the current one ringed.
 

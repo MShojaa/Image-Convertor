@@ -930,3 +930,115 @@ def test_a_nonsense_start_path_does_not_stop_the_dialog(recording):
 
     assert wait_for(lambda: folder_events(recording))
     assert folder_events(recording)[0]["ok"] is True
+
+
+# --- the titlebar the page draws itself ----------------------------------
+
+class FakeFrame:
+    """Stands in for the platform bits of having no titlebar."""
+
+    def __init__(self, maximized=False):
+        self.maximized = maximized
+        self.prepared = 0
+
+    def before_maximize(self):
+        self.prepared += 1
+
+    def is_maximized(self):
+        return self.maximized
+
+
+class ControllableWindow(FakeWindow):
+    """Records what the titlebar asked the window to do."""
+
+    def __init__(self, frame):
+        super().__init__()
+        self.did = []
+        self._frame = frame
+
+    def minimize(self):
+        self.did.append("minimize")
+
+    def maximize(self):
+        self.did.append("maximize")
+        self._frame.maximized = True
+
+    def restore(self):
+        self.did.append("restore")
+        self._frame.maximized = False
+
+    def destroy(self):
+        self.did.append("destroy")
+
+
+@pytest.fixture
+def framed(tmp_path):
+    """An Api with a window and a frame it can drive."""
+    frame = FakeFrame()
+    api = Api(tmp_path)
+    api.attach(ControllableWindow(frame), frame)
+    return api
+
+
+def test_the_minimize_button_minimizes(framed):
+    assert framed.window_minimize()["ok"]
+    assert framed._window.did == ["minimize"]
+
+
+def test_the_close_button_closes(framed):
+    assert framed.window_close()["ok"]
+    assert framed._window.did == ["destroy"]
+
+
+def test_the_maximize_button_maximizes_then_restores(framed):
+    first = framed.window_toggle_maximize()
+    assert first["ok"] and first["maximized"] is True
+
+    second = framed.window_toggle_maximize()
+    assert second["ok"] and second["maximized"] is False
+
+    assert framed._window.did == ["maximize", "restore"]
+
+
+def test_the_maximized_size_is_set_before_every_maximize(framed):
+    """It is a property of the monitor, and the window can be dragged to
+    another one with its taskbar somewhere else."""
+    framed.window_toggle_maximize()
+    framed.window_toggle_maximize()
+    framed.window_toggle_maximize()
+
+    assert framed._frame.prepared == 2, "only before maximizing, and every time"
+
+
+def test_the_button_follows_a_window_maximized_elsewhere(framed):
+    """Aero Snap, a drag to the top edge, Win+Up -- none of them come through
+    this app, so the state is asked for rather than remembered."""
+    framed._frame.maximized = True
+
+    assert framed.window_state()["maximized"] is True
+
+    # And toggling now restores rather than maximizing again.
+    framed.window_toggle_maximize()
+    assert framed._window.did == ["restore"]
+
+
+def test_the_titlebar_works_without_a_frame_at_all(tmp_path):
+    """Off Windows there is no frame object; the buttons must still work."""
+    api = Api(tmp_path)
+    frame = FakeFrame()
+    api.attach(ControllableWindow(frame))  # no frame passed
+
+    assert api.window_minimize()["ok"]
+    assert api.window_state()["maximized"] is False
+    assert api.window_toggle_maximize()["ok"]
+    assert api._window.did == ["minimize", "maximize"]
+
+
+@pytest.mark.parametrize(
+    "call", ["window_minimize", "window_toggle_maximize", "window_close"]
+)
+def test_the_buttons_say_so_when_there_is_no_window(tmp_path, call):
+    answer = getattr(Api(tmp_path), call)()
+
+    assert answer["ok"] is False
+    assert "No window" in answer["error"]

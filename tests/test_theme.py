@@ -66,10 +66,26 @@ def test_both_themes_define_the_same_colours():
     assert set(DARK) == set(LIGHT)
 
 
+#: Tokens that are deliberately the same in both themes. The close button's
+#: red is a platform convention rather than a theme colour -- Windows draws it
+#: the same in its own light and dark themes, and matching that is worth more
+#: than being internally consistent. Anything added here needs that kind of
+#: reason; the test below is what asks for one.
+SHARED_ON_PURPOSE = {"--danger", "--danger-text"}
+
+
 def test_the_light_theme_is_not_the_dark_one():
     """Every colour is chosen for its theme; none is left behind by accident."""
     shared = {name for name in DARK if DARK[name] == LIGHT[name]}
-    assert not shared, f"identical in both themes: {sorted(shared)}"
+    assert shared <= SHARED_ON_PURPOSE, (
+        f"identical in both themes: {sorted(shared - SHARED_ON_PURPOSE)}"
+    )
+
+
+def test_the_shared_tokens_are_actually_shared():
+    """If one stops being shared, the exemption above should go with it."""
+    for name in SHARED_ON_PURPOSE:
+        assert DARK[name] == LIGHT[name], f"{name} no longer needs exempting"
 
 
 def test_each_theme_declares_its_colour_scheme():
