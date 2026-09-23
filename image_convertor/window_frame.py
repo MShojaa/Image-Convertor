@@ -35,6 +35,14 @@ Assist, the layouts grid, drag-to-the-top to maximize, shake. A window moved by
 hold of the titlebar". Windows runs the loop from there and every one of those
 behaviours comes back, because they are not being imitated.
 
+**The bit that gives the edges back does not know about maximizing.** Windows
+does not let you resize a maximized window -- there is nothing to resize it to
+-- but `WS_THICKFRAME` is a style, not a state, so a maximized window still had
+eight live grab areas and could be dragged smaller by its edge without ever
+leaving the maximized state. The bit follows the state now: off while
+maximized, back on when restored, and `resized` is the event that says which,
+because it fires whichever way the window got there.
+
 **Putting `WS_THICKFRAME` back brings a visible frame with it.** The grab areas
 are invisible, but DWM still draws the window's border around them -- a line in
 the accent colour of whoever's theme is running, or black, outside a window
@@ -72,6 +80,19 @@ SWP_NOZORDER = 0x0004
 SWP_FRAMECHANGED = 0x0020
 
 
+def sizing_style(style: int, maximized: bool) -> int:
+    """The style a window in this state should have.
+
+    Pulled out of the calls around it because it is the whole of the rule and
+    the only part worth testing: a maximized window has no resize border, a
+    restored one does, and either way it can still be minimized.
+    """
+    style |= WS_MINIMIZEBOX
+    if maximized:
+        return style & ~WS_THICKFRAME
+    return style | WS_THICKFRAME
+
+
 def on_windows() -> bool:
     return sys.platform == "win32"
 
@@ -101,7 +122,7 @@ class WindowFrame:
             return
 
         self._handle = self._native_handle()
-        self._restore_sizing_border()
+        self.follow_state()
         self._hide_frame_border()
         self.before_maximize()
 
@@ -129,22 +150,29 @@ class WindowFrame:
         except (TypeError, ValueError):
             return 0
 
-    def _restore_sizing_border(self) -> None:
-        """Add WS_THICKFRAME back, leaving the caption off.
+    def follow_state(self, *_: object) -> None:
+        """Give the window the resize border its state should have.
 
-        This is the whole of "frameless but still resizable" -- Windows draws
-        the invisible grab areas at the edges from this bit alone.
-        WS_MINIMIZEBOX goes back with it, because it is what lets the window
-        minimize and restore through the taskbar in the ordinary way.
+        Hooked to `resized`, which fires however the window got there -- this
+        app's own maximize button, Aero Snap, Win+Up, a drag to the top edge,
+        the taskbar. On the GUI thread, like `moved`.
+
+        This is "frameless but still resizable" and its other half. Windows
+        draws the invisible grab areas at the edges from `WS_THICKFRAME`
+        alone, and that is a style rather than a state: a maximized window kept
+        all eight of them and could be dragged smaller by an edge while still
+        calling itself maximized, which no other window on this desktop does.
         """
-        if not self._handle:
+        if not (on_windows() and self._handle):
             return
 
         user32 = ctypes.windll.user32
         style = user32.GetWindowLongW(self._handle, GWL_STYLE)
-        user32.SetWindowLongW(
-            self._handle, GWL_STYLE, style | WS_THICKFRAME | WS_MINIMIZEBOX
-        )
+        wanted = sizing_style(style, self.is_maximized())
+        if wanted == style:
+            return
+
+        user32.SetWindowLongW(self._handle, GWL_STYLE, wanted)
         # Without SWP_FRAMECHANGED the new style is stored and not applied:
         # the window keeps the frame it was drawn with until something else
         # makes it recalculate.

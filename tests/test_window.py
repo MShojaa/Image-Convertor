@@ -12,6 +12,7 @@ from __future__ import annotations
 import pytest
 
 import main
+from image_convertor import window_frame
 
 
 class FakeScreen:
@@ -140,3 +141,52 @@ def test_the_wanted_height_fits_a_scaled_1080p_screen(display):
 def test_the_minimum_is_smaller_than_the_default():
     assert main.MIN_SIZE[0] < main.WANTED_SIZE[0]
     assert main.MIN_SIZE[1] < main.WANTED_SIZE[1]
+
+
+# --- the resize border, which is a style and has to follow a state ---------
+
+
+class TestTheResizeBorderFollowsTheState:
+    """A maximized window does not resize.
+
+    `WS_THICKFRAME` is what gives a frameless window its eight grab areas
+    back, and it is a style rather than a state: without this a maximized
+    window kept all of them and could be dragged smaller by an edge while
+    still calling itself maximized.
+    """
+
+    def test_a_restored_window_has_a_resize_border(self):
+        style = window_frame.sizing_style(0, maximized=False)
+
+        assert style & window_frame.WS_THICKFRAME
+
+    def test_a_maximized_window_has_none(self):
+        style = window_frame.sizing_style(window_frame.WS_THICKFRAME, maximized=True)
+
+        assert not style & window_frame.WS_THICKFRAME
+
+    def test_either_way_the_window_can_still_be_minimized(self):
+        """It is what lets the window minimize and restore through the taskbar
+        in the ordinary way, and it is not what this decides."""
+        for maximized in (True, False):
+            style = window_frame.sizing_style(0, maximized=maximized)
+
+            assert style & window_frame.WS_MINIMIZEBOX, maximized
+
+    def test_nothing_else_about_the_style_is_touched(self):
+        """The caption stays off -- taking it off is the whole point of the
+        titlebar -- and every other bit a window may carry survives."""
+        other = 0x00080000 | 0x10000000  # WS_SYSMENU, WS_VISIBLE
+
+        for maximized in (True, False):
+            style = window_frame.sizing_style(other, maximized=maximized)
+
+            assert style & other == other, maximized
+
+    def test_asking_twice_says_the_same_thing(self):
+        """`follow_state` compares its answer with the style already set and
+        does nothing when they match, so a resize that changes neither costs
+        no SetWindowPos -- and that comparison only works if this is stable."""
+        once = window_frame.sizing_style(0, maximized=True)
+
+        assert window_frame.sizing_style(once, maximized=True) == once

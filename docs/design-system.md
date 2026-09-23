@@ -365,6 +365,14 @@ All measured, and all in `image_convertor/window_frame.py` with the numbers:
   at 1928x1088 against a work area of 1920x1020 -- the bottom 68 pixels,
   including the Convert button, behind the taskbar. `MaximizedBounds` fixes it.
 - **That bound is per monitor**, so it is set again whenever the window moves.
+- **The bit that gives the edges back does not know about maximizing.** Windows
+  does not let you resize a maximized window -- there is nothing to resize it
+  to -- but `WS_THICKFRAME` is a style, not a state, so a maximized window kept
+  all eight grab areas and could be dragged smaller by an edge without ever
+  leaving the maximized state. The bit follows the state now: off while
+  maximized, back on when restored. `resized` is what says which, because it
+  fires however the window got there -- the page's own button, Aero Snap,
+  Win+Up, a drag to the top edge, the taskbar.
 - **The style bit that restores the edges also draws them.** The grab areas are
   invisible, but DWM still draws the window's border around them -- a line
   outside a window that is otherwise the app's own colour to its edge.
