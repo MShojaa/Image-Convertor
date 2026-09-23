@@ -11,7 +11,13 @@ from __future__ import annotations
 
 import pytest
 
+import re
+from pathlib import Path
+
 import main
+from image_convertor import window_frame
+
+UI = Path(__file__).resolve().parent.parent / "UI"
 
 
 class FakeScreen:
@@ -140,3 +146,64 @@ def test_the_wanted_height_fits_a_scaled_1080p_screen(display):
 def test_the_minimum_is_smaller_than_the_default():
     assert main.MIN_SIZE[0] < main.WANTED_SIZE[0]
     assert main.MIN_SIZE[1] < main.WANTED_SIZE[1]
+
+
+# --- the resize border, and the edges that replaced its hit-testing --------
+
+
+class TestTheWindowKeepsWhatMakesItAWindow:
+    """`WS_THICKFRAME` is not about drawing a frame.
+
+    It is what Windows reads to decide a window may be sized -- and with it,
+    snapped to an edge and maximized to the work area. The frame it brings is
+    taken away again by the WM_NCCALCSIZE hook, because 8px of unpainted grey
+    around the window is what "the borders do not feel nice" was.
+    """
+
+    def test_the_sizing_bit_is_added(self):
+        assert window_frame.with_sizing_border(0) & window_frame.WS_THICKFRAME
+
+    def test_so_is_the_one_the_taskbar_needs(self):
+        assert window_frame.with_sizing_border(0) & window_frame.WS_MINIMIZEBOX
+
+    def test_nothing_else_is_touched(self):
+        """The caption stays off -- taking it off is the whole point of the
+        titlebar -- and every other bit a window may carry survives."""
+        other = 0x00080000 | 0x10000000  # WS_SYSMENU, WS_VISIBLE
+
+        assert window_frame.with_sizing_border(other) & other == other
+
+    def test_asking_twice_says_the_same_thing(self):
+        """The caller compares the answer with the style already set and skips
+        the SetWindowPos when they match, which only works if this is
+        stable."""
+        once = window_frame.with_sizing_border(0)
+
+        assert window_frame.with_sizing_border(once) == once
+
+
+class TestTheEdgesAgreeAcrossThreeFiles:
+    """The page names an edge, Python maps it to one of Windows' hit-test
+    codes, and the stylesheet gives it a cursor and a place to be. A typo in
+    any one of them is an edge that silently does nothing."""
+
+    def test_every_edge_the_page_offers_is_one_python_knows(self):
+        markup = (UI / "index.html").read_text(encoding="utf-8")
+        offered = set(re.findall(r'data-edge="([^"]+)"', markup))
+
+        assert offered, "the page offers no resize edges at all"
+        assert offered == set(window_frame.EDGES)
+
+    def test_every_edge_has_a_cursor(self):
+        """An edge with no cursor is an edge nobody finds."""
+        styles = (UI / "style.css").read_text(encoding="utf-8")
+
+        for edge in window_frame.EDGES:
+            assert 'data-edge="%s"' % edge in styles, edge
+
+    def test_the_hit_test_codes_are_the_eight_windows_defines(self):
+        """HTLEFT through HTBOTTOMRIGHT, 10 to 17. Wrong numbers here resize
+        the window from the wrong side."""
+        assert sorted(window_frame.EDGES.values()) == list(range(10, 18))
+
+

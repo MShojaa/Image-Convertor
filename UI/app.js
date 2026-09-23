@@ -72,14 +72,15 @@ function wire() {
   el("theme-switcher").addEventListener("keydown", themeKeys);
   el("reveal").addEventListener("click", revealOutput);
 
-  el("window-minimize").addEventListener("click", () => window.pywebview.api.window_minimize());
-  el("window-maximize").addEventListener("click", toggleMaximize);
-  el("window-close").addEventListener("click", () => window.pywebview.api.window_close());
+  captionButton("window-minimize", () => window.pywebview.api.window_minimize());
+  captionButton("window-maximize", toggleMaximize);
+  captionButton("window-close", () => window.pywebview.api.window_close());
 
-  /* Double-clicking a titlebar maximizes it. Every other window on this
-     desktop does, and the one that does not feels broken rather than
-     minimal. */
-  document.querySelector(".titlebar-grip").addEventListener("dblclick", toggleMaximize);
+  document.querySelector(".titlebar-grip").addEventListener("mousedown", grabTitlebar);
+
+  for (const edge of document.querySelectorAll(".resize-edge")) {
+    edge.addEventListener("mousedown", (event) => grabEdge(event, edge.dataset.edge));
+  }
   el("format").addEventListener("change", showFormatNote);
 
   /* Validated as it is typed, by the same parser the conversion uses, so the
@@ -476,6 +477,78 @@ function fail(message) {
 }
 
 /* -- the window's own titlebar ------------------------------------------- */
+
+/* Resizing from one of the page's eight edges.
+
+   The window is all client area -- window_frame.py takes the non-client frame
+   away, because it was 8px of unpainted grey around a window that is supposed
+   to be the app's own colour to its edge. That leaves Windows nothing to
+   hit-test, so the edges are the page's to offer and the gesture is handed
+   over the same way a titlebar drag is.
+*/
+async function grabEdge(event, edge) {
+  if (event.button !== 0) return;
+  event.preventDefault();
+  await window.pywebview.api.window_resize(edge);
+}
+
+/* Dragging the window, by the only means that gets Windows' own behaviour.
+
+   pywebview's drag region works by moving the window from here: it watches
+   mousemove and asks Python to put the window at the new position. Windows is
+   never told a drag is happening, so everything it does for a real titlebar --
+   snapping to an edge and previewing it, Snap Assist, the layouts grid,
+   drag-to-the-top to maximize, shake -- simply does not happen. None of it can
+   be imitated from this end either: they are not window positions, they are a
+   modal loop inside Windows.
+
+   So the grip is not a pywebview drag region any more. Mousedown asks Windows
+   to take the gesture, and Windows runs the drag.
+
+   Two things ride along:
+
+   Double-click. Windows would normally maximize on a double-click of the
+   caption, but it only sees the presses we forward, and the first one starts a
+   move loop that swallows the second. `detail` counts the clicks, so the
+   second press maximizes here instead of starting another drag.
+
+   The fallback. If Windows will not take it -- another platform, or a backend
+   with no handle -- the grip becomes a pywebview drag region again and the
+   window moves the old way. pywebview reads the selector at mousedown, so
+   adding the class now is enough for the very next drag.
+*/
+async function grabTitlebar(event) {
+  if (event.button !== 0) return;
+
+  if (event.detail === 2) {
+    toggleMaximize();
+    return;
+  }
+
+  const answer = await window.pywebview.api.window_drag();
+  if (!answer.ok) {
+    document.querySelector(".titlebar-grip").classList.add("pywebview-drag-region");
+  }
+}
+
+/* A caption button, wired up and told to let go afterwards.
+
+   Clicking maximize left the button focused, and the window coming back from
+   the resize is enough for Chromium to call that focus visible -- so a bright
+   ring sat on the button until something else was clicked. No other window on
+   this desktop does that.
+
+   `detail` is how the press arrived: a mouse click counts the clicks and a
+   keyboard activation reports 0. So the pointer drops focus and the keyboard
+   keeps it, which is the only way round that serves both.
+*/
+function captionButton(id, act) {
+  const button = el(id);
+  button.addEventListener("click", (event) => {
+    if (event.detail > 0) button.blur();
+    act();
+  });
+}
 
 async function toggleMaximize() {
   const answer = await window.pywebview.api.window_toggle_maximize();

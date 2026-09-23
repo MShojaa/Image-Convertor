@@ -58,7 +58,8 @@ changing the hue changes every place it is used at once.
 
 | token | value | what it is |
 |---|---|---|
-| `--surface-sunken` | `#0e1013` | the window behind everything; the log and the chain strip |
+| `--surface-window` | `#131519` | the window behind everything |
+| `--surface-sunken` | `#0e1013` | a well cut into it: the log, the progress track |
 | `--surface` | `#17191e` | panels, anything sitting on the window |
 | `--surface-raised` | `#1f232a` | inputs, the things you can click into |
 | `--surface-hover` | `#262b33` | a row or a quiet button under the pointer |
@@ -66,7 +67,17 @@ changing the hue changes every place it is used at once.
 | `--border-strong` | `#3c444f` | a border that has to be seen: a hovered input, a scrollbar |
 | `--edge-light` | `rgba(255,255,255,0.05)` | the lit top pixel of a panel |
 
-Four levels and no more, and the fourth is a state rather than a layer. Depth
+**The window and the wells cut into it are two different jobs.** They were one
+token, and the refresh darkened it for the log's sake -- which also made the
+12px of page around the panels the darkest thing on screen, a black rim framing
+the window under a lighter titlebar. Measured at the left edge: 12px of
+`#0e1013`, then the panel's border, then `#17191e`. That rim is what "the
+borders do not feel nice" was pointing at, and it was never a border. A well is
+meant to look cut in; a window is not, and it now sits between the well and the
+panels so the window reads as one object with its own titlebar.
+
+Five levels and no more, and two of them are not layers: `--surface-hover` is a
+state, and `--surface-window` is the thing the layers sit on. Depth
 here comes from the surface getting *lighter* as it comes forward, which is how
 a dark interface does it -- shadows are invisible on near-black, so a raised
 panel that is the same colour as the one under it with a shadow between them
@@ -169,6 +180,15 @@ edge is easier to read when the characters line up, and `128x64` next to
 
 A 4px scale. Every margin, padding and gap in the stylesheet is one of these.
 
+**Height is the scarce one, and the scale is not the budget.** A 1080p laptop
+at 125% scaling is 864 logical pixels tall and `main.py` sizes the window for
+it; every vertical pixel a panel spends is a pixel the log does not get. The
+refresh learned this the expensive way -- moving the panels from `--space-2` to
+`--space-3` padding and gaps, one step on the scale, put 852px of controls into
+708px of room at that window size and hung a scrollbar down the one column that
+should never need one. The panels are back at `--space-2` vertically. Colour,
+shape and state carry the look; padding does not.
+
 | token | value |
 |---|---|
 | `--space-1` | `4px` |
@@ -206,8 +226,10 @@ for a box.
 | token | for |
 |---|---|
 | `--shadow-sm` | the resting lift on a panel, the switcher, the logo |
-| `--shadow-md` | anything that floats over the window |
 | `--shadow-accent` | the Convert button, and only that |
+
+Two, and there is no third: nothing in this window floats over anything, so a
+token for that was written, used nowhere, and taken out again.
 
 Defined per theme, not shared. On dark a shadow is nearly invisible and only
 softens an edge, so `--edge-light` does the lifting; on light the shadow *is*
@@ -273,18 +295,62 @@ all the way to the top edge, rather than a strip of someone else's chrome above
 a dark page.
 
 It is 32px, `--surface`, with a border under it. The left half carries the mark
-and the name and is the **drag region** -- `pywebview-drag-region`, which is
-what pywebview moves the window from. The right half carries the theme switcher
-and then the window buttons, and is deliberately *not* draggable: a button you
-can accidentally drag the window with is a button that sometimes does nothing.
+and the name and is what the window drags from. The right half carries the
+theme switcher and then the window buttons, and is deliberately *not*
+draggable: a button you can accidentally drag the window with is a button that
+sometimes does nothing.
 
 Double-clicking the drag region maximizes, because every other window on this
 desktop does and the one that does not feels broken rather than minimal.
+
+**The drag region is not a `pywebview-drag-region`, and that is the point.**
+pywebview's own drag region watches `mousemove` in the page and asks Python to
+put the window at the new position -- so the window is *placed*, frame by
+frame, by JavaScript. Windows is never told a drag is happening, and every
+behaviour it attaches to dragging a titlebar is attached to the modal move loop
+that a real caption press starts: snapping to an edge and previewing it, Snap
+Assist, the layouts grid, drag-to-the-top to maximize, shake to clear the
+desktop. A window moved by `SetBounds` gets none of them. That is not a gap
+that can be closed from the page -- they are not window positions, they are a
+loop inside Windows.
+
+So mousedown on the grip calls `window_drag`, which releases the capture and
+posts `WM_NCLBUTTONDOWN` with `HTCAPTION` -- Windows' own "the user has taken
+hold of the titlebar" -- and Windows runs the drag from there. Every one of
+those behaviours comes back, because none of them is being imitated.
+
+Two things ride along. Windows would maximize on a double-click of a real
+caption, but it only sees the presses the page forwards and the first one
+starts a move loop that swallows the second, so `event.detail` catches the
+second press and maximizes here instead. And if the platform will not take the
+drag -- another OS, or a backend with no window handle -- the grip becomes a
+`pywebview-drag-region` again and the window moves the old way: worse, and not
+broken. pywebview reads the selector at mousedown, so adding the class is
+enough for the very next drag.
 
 **The buttons are 46px wide and the full height of the bar**, which is what
 Windows uses: maximized, the target reaches the very corner of the screen, and
 a corner is the easiest thing on a screen to hit. Minimize, maximize, close, in
 that order, for the same reason.
+
+Full height is easy to write down and easy to lose. `align-items: center` on
+the actions strip made the row of buttons as tall as its own content -- 12px of
+icon -- so they were 46x12 in a 32px bar, floating in the middle of it and
+touching no edge at all. The strip stretches; the switcher centres itself.
+
+**The glyphs are 12px on a 1px stroke**, on the half-pixel coordinates their
+paths already use. They were 1.1, which straddles two device pixels at 125%
+scaling: soft glyphs next to the crisp ones Windows draws on every other
+window, which reads as wrong rather than as different.
+
+**A caption button lets go of focus when the pointer presses it.** Clicking
+maximize left the button focused, and the window returning from the resize is
+enough for Chromium to call that focus visible -- so a ring sat on the button
+until something else was clicked, which no other window on this desktop does.
+`event.detail` is how the press arrived: a mouse click counts clicks, a
+keyboard activation reports 0. The pointer drops focus, the keyboard keeps it.
+The ring itself is 1px, inset -- a caption button is chrome, and the 2px accent
+box a form control wears reads as a selected cell up here.
 
 **Close goes red on hover, and that red is the same in both themes.** It is the
 one place a fixed colour is right -- every other window on this desktop has a
@@ -310,6 +376,64 @@ All measured, and all in `image_convertor/window_frame.py` with the numbers:
   at 1928x1088 against a work area of 1920x1020 -- the bottom 68 pixels,
   including the Convert button, behind the taskbar. `MaximizedBounds` fixes it.
 - **That bound is per monitor**, so it is set again whenever the window moves.
+- **The corners are Windows', not CSS'.** A `border-radius` on the page rounds
+  the content inside a window that is still square, so the corners fill with
+  whatever is behind it. `DWMWA_WINDOW_CORNER_PREFERENCE` rounds the window
+  itself, and it follows the state the same way the resize border does: rounded
+  while the window floats, square when maximized -- a rounded corner against
+  the edge of the screen is a notch out of the screen, which is why Windows
+  draws its own maximized windows square.
+- **The bit that gives the edges back does not know about maximizing.** Windows
+  does not let you resize a maximized window -- there is nothing to resize it
+  to -- but `WS_THICKFRAME` is a style, not a state, so a maximized window kept
+  all eight grab areas and could be dragged smaller by an edge without ever
+  leaving the maximized state. The bit follows the state now: off while
+  maximized, back on when restored. `resized` is what says which, because it
+  fires however the window got there -- the page's own button, Aero Snap,
+  Win+Up, a drag to the top edge, the taskbar.
+- **The style bit that restores the edges brings a frame with it.** Measured,
+  with `GetWindowRect` against `GetClientRect` on the real window: with
+  `WS_THICKFRAME` the client area is inset by 8px on every side and the web
+  view sits at +8,+8. Nothing paints those 8 pixels -- black at first, white
+  once the frame is recalculated. That is the "border" that was never a
+  border, and no page-side colour can reach it, because it is not the page.
+
+  `WM_NCCALCSIZE` is where a window says how much of itself is client, and
+  answering "all of it" leaves the style bit -- so Windows still snaps and
+  still maximizes to the work area -- with nothing left over to paint.
+  Measured after: non-client 0 on every side in every state, the web view at
+  +0,+0, and maximized lands on 1920x1020, the work area exactly.
+
+  It costs the mouse edges: with no non-client area there is nothing for
+  Windows to hit-test. The page offers them instead -- see below.
+- **`DWMWA_BORDER_COLOR`** set to `DWMWA_COLOR_NONE` turns off the line DWM
+  draws around the window. Windows 11 or nothing: on 10 the attribute is
+  unknown, the call fails, and the border stays.
+- **`settle` runs before there is anything to settle.** `shown` fires while
+  the form still reports no native handle, so every call in it bailed and the
+  window came up with no resize border, no rounded corners and its frame
+  untouched -- which is why the first two attempts at this appeared to change
+  nothing. The handle is asked for again on every entry point now, and the
+  setup runs the first time one answers.
+
+### The eight edges
+
+The window is all client area, so Windows has nothing to hit-test and the
+edges are the page's to offer: eight absolutely-positioned boxes above
+everything, 6px along the sides and 12px in the corners so a corner beats the
+two edges it overlaps. Mousedown hands the gesture over exactly as the
+titlebar does -- `WM_NCLBUTTONDOWN` with `HTLEFT` through `HTBOTTOMRIGHT` --
+and Windows runs the loop, snapping included.
+
+**A maximized window hides them**, which is the whole of "a maximized window
+does not resize". It used to be done by taking `WS_THICKFRAME` off, and that
+meant a style change and a frame recalculation on every maximize -- which is
+what repainted the frame white.
+
+Three files have to agree on the eight names: the markup offers them, Python
+maps them to Windows' hit-test codes, the stylesheet gives each a cursor and a
+place to be. `tests/test_window.py` checks all three against each other,
+because a typo in any one of them is an edge that silently does nothing.
 
 ### The theme switcher
 
@@ -317,6 +441,14 @@ A pill with three choices in it -- system, light, dark, as a monitor, a sun and
 a moon -- with the chosen one ringed. **All three are on screen at once**, so
 which theme is set and what the alternatives are can both be read without
 pressing anything.
+
+**It is 24px, not `--control-height`.** It used to be a form control in a page
+header beside the panels, and it kept that height when it moved into the
+titlebar -- where `--control-height` is 34px and the bar is 32, so the pill hung
+a pixel above the top edge of the window and a pixel through the bar's own
+bottom border. Up here it is chrome and it sizes to the bar. The lesson is the
+general one: `--control-height` is the height of a control in a panel, and the
+titlebar is not a panel.
 
 It replaced a single button that cycled through the three. Two things were
 wrong with that: from a dark desktop the first press picked "dark" and nothing

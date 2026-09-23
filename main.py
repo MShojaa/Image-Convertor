@@ -157,6 +157,10 @@ def main(argv: list[str] | None = None) -> int:
     # move is when that changes. On the GUI thread, which is the only one the
     # form may be touched from.
     window.events.moved += frame.follow_monitor
+    # A maximized window has no resize border, and `resized` is what says the
+    # window has become one -- or stopped being one -- however it got there:
+    # the page's own button, Aero Snap, Win+Up, a drag to the top edge.
+    window.events.resized += frame.follow_state
 
     # The Api needs the window to open a folder dialog and to call into the
     # page, and create_window is the only place it exists. It goes on a private
