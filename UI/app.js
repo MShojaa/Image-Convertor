@@ -77,6 +77,10 @@ function wire() {
   captionButton("window-close", () => window.pywebview.api.window_close());
 
   document.querySelector(".titlebar-grip").addEventListener("mousedown", grabTitlebar);
+
+  for (const edge of document.querySelectorAll(".resize-edge")) {
+    edge.addEventListener("mousedown", (event) => grabEdge(event, edge.dataset.edge));
+  }
   el("format").addEventListener("change", showFormatNote);
 
   /* Validated as it is typed, by the same parser the conversion uses, so the
@@ -473,6 +477,20 @@ function fail(message) {
 }
 
 /* -- the window's own titlebar ------------------------------------------- */
+
+/* Resizing from one of the page's eight edges.
+
+   The window is all client area -- window_frame.py takes the non-client frame
+   away, because it was 8px of unpainted grey around a window that is supposed
+   to be the app's own colour to its edge. That leaves Windows nothing to
+   hit-test, so the edges are the page's to offer and the gesture is handed
+   over the same way a titlebar drag is.
+*/
+async function grabEdge(event, edge) {
+  if (event.button !== 0) return;
+  event.preventDefault();
+  await window.pywebview.api.window_resize(edge);
+}
 
 /* Dragging the window, by the only means that gets Windows' own behaviour.
 

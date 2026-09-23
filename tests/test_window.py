@@ -11,8 +11,13 @@ from __future__ import annotations
 
 import pytest
 
+import re
+from pathlib import Path
+
 import main
 from image_convertor import window_frame
+
+UI = Path(__file__).resolve().parent.parent / "UI"
 
 
 class FakeScreen:
@@ -143,75 +148,62 @@ def test_the_minimum_is_smaller_than_the_default():
     assert main.MIN_SIZE[1] < main.WANTED_SIZE[1]
 
 
-# --- the resize border, which is a style and has to follow a state ---------
+# --- the resize border, and the edges that replaced its hit-testing --------
 
 
-class TestTheResizeBorderFollowsTheState:
-    """A maximized window does not resize.
+class TestTheWindowKeepsWhatMakesItAWindow:
+    """`WS_THICKFRAME` is not about drawing a frame.
 
-    `WS_THICKFRAME` is what gives a frameless window its eight grab areas
-    back, and it is a style rather than a state: without this a maximized
-    window kept all of them and could be dragged smaller by an edge while
-    still calling itself maximized.
+    It is what Windows reads to decide a window may be sized -- and with it,
+    snapped to an edge and maximized to the work area. The frame it brings is
+    taken away again by the WM_NCCALCSIZE hook, because 8px of unpainted grey
+    around the window is what "the borders do not feel nice" was.
     """
 
-    def test_a_restored_window_has_a_resize_border(self):
-        style = window_frame.sizing_style(0, maximized=False)
+    def test_the_sizing_bit_is_added(self):
+        assert window_frame.with_sizing_border(0) & window_frame.WS_THICKFRAME
 
-        assert style & window_frame.WS_THICKFRAME
+    def test_so_is_the_one_the_taskbar_needs(self):
+        assert window_frame.with_sizing_border(0) & window_frame.WS_MINIMIZEBOX
 
-    def test_a_maximized_window_has_none(self):
-        style = window_frame.sizing_style(window_frame.WS_THICKFRAME, maximized=True)
-
-        assert not style & window_frame.WS_THICKFRAME
-
-    def test_either_way_the_window_can_still_be_minimized(self):
-        """It is what lets the window minimize and restore through the taskbar
-        in the ordinary way, and it is not what this decides."""
-        for maximized in (True, False):
-            style = window_frame.sizing_style(0, maximized=maximized)
-
-            assert style & window_frame.WS_MINIMIZEBOX, maximized
-
-    def test_nothing_else_about_the_style_is_touched(self):
+    def test_nothing_else_is_touched(self):
         """The caption stays off -- taking it off is the whole point of the
         titlebar -- and every other bit a window may carry survives."""
         other = 0x00080000 | 0x10000000  # WS_SYSMENU, WS_VISIBLE
 
-        for maximized in (True, False):
-            style = window_frame.sizing_style(other, maximized=maximized)
-
-            assert style & other == other, maximized
+        assert window_frame.with_sizing_border(other) & other == other
 
     def test_asking_twice_says_the_same_thing(self):
-        """`follow_state` compares its answer with the style already set and
-        does nothing when they match, so a resize that changes neither costs
-        no SetWindowPos -- and that comparison only works if this is stable."""
-        once = window_frame.sizing_style(0, maximized=True)
+        """The caller compares the answer with the style already set and skips
+        the SetWindowPos when they match, which only works if this is
+        stable."""
+        once = window_frame.with_sizing_border(0)
 
-        assert window_frame.sizing_style(once, maximized=True) == once
+        assert window_frame.with_sizing_border(once) == once
 
 
-class TestTheCornersFollowTheStateToo:
-    """Rounded while the window floats, square when it is maximized.
+class TestTheEdgesAgreeAcrossThreeFiles:
+    """The page names an edge, Python maps it to one of Windows' hit-test
+    codes, and the stylesheet gives it a cursor and a place to be. A typo in
+    any one of them is an edge that silently does nothing."""
 
-    A rounded corner against the edge of the screen is a notch out of the
-    screen, which is why Windows draws its own maximized windows square.
-    """
+    def test_every_edge_the_page_offers_is_one_python_knows(self):
+        markup = (UI / "index.html").read_text(encoding="utf-8")
+        offered = set(re.findall(r'data-edge="([^"]+)"', markup))
 
-    def test_a_restored_window_is_rounded(self):
-        assert window_frame.corner_preference(maximized=False) == (
-            window_frame.DWMWCP_ROUND
-        )
+        assert offered, "the page offers no resize edges at all"
+        assert offered == set(window_frame.EDGES)
 
-    def test_a_maximized_window_is_not(self):
-        assert window_frame.corner_preference(maximized=True) == (
-            window_frame.DWMWCP_DONOTROUND
-        )
+    def test_every_edge_has_a_cursor(self):
+        """An edge with no cursor is an edge nobody finds."""
+        styles = (UI / "style.css").read_text(encoding="utf-8")
 
-    def test_the_two_are_different(self):
-        """Both are sent to the same attribute, so a typo that made them equal
-        would show as corners that never change and nothing else."""
-        assert window_frame.corner_preference(True) != window_frame.corner_preference(
-            False
-        )
+        for edge in window_frame.EDGES:
+            assert 'data-edge="%s"' % edge in styles, edge
+
+    def test_the_hit_test_codes_are_the_eight_windows_defines(self):
+        """HTLEFT through HTBOTTOMRIGHT, 10 to 17. Wrong numbers here resize
+        the window from the wrong side."""
+        assert sorted(window_frame.EDGES.values()) == list(range(10, 18))
+
+

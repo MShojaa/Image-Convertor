@@ -130,6 +130,20 @@ class Api:
             return _fail("The platform would not take the drag.")
         return _ok()
 
+    def window_resize(self, edge: str) -> dict:
+        """An edge of the page was grabbed: let Windows do the resizing.
+
+        The window has no non-client area -- it is all page, which is what
+        makes the titlebar reach the top of the window and stopped the frame
+        showing as an unpainted strip. So there is nothing left for Windows to
+        hit-test, and the eight edges are the page's to offer.
+        """
+        if self._frame is None:
+            return _fail("No frame.")
+        if not self._frame.begin_resize(str(edge)):
+            return _fail("The platform would not take the resize.")
+        return _ok()
+
     def window_close(self) -> dict:
         if self._window is None:
             return _fail("No window yet.")

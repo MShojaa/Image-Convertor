@@ -942,6 +942,7 @@ class FakeFrame:
         self.prepared = 0
         self.takes_drag = takes_drag
         self.drags = 0
+        self.resizes = []
 
     def before_maximize(self):
         self.prepared += 1
@@ -951,6 +952,10 @@ class FakeFrame:
 
     def begin_drag(self):
         self.drags += 1
+        return self.takes_drag
+
+    def begin_resize(self, edge):
+        self.resizes.append(edge)
         return self.takes_drag
 
 
@@ -1056,6 +1061,29 @@ def test_dragging_says_so_off_a_platform_that_has_a_frame(tmp_path):
     api.attach(ControllableWindow(frame))  # no frame passed
 
     assert api.window_drag()["ok"] is False
+
+
+def test_grabbing_an_edge_hands_the_resize_to_the_platform(framed):
+    """The window has no non-client area -- it is all page -- so there is
+    nothing for Windows to hit-test and the edges are the page's to offer."""
+    assert framed.window_resize("bottom-right")["ok"]
+    assert framed._frame.resizes == ["bottom-right"]
+
+
+def test_an_edge_the_platform_will_not_take_says_so(tmp_path):
+    frame = FakeFrame(takes_drag=False)
+    api = Api(tmp_path)
+    api.attach(ControllableWindow(frame), frame)
+
+    assert api.window_resize("left")["ok"] is False
+
+
+def test_resizing_says_so_with_no_frame(tmp_path):
+    frame = FakeFrame()
+    api = Api(tmp_path)
+    api.attach(ControllableWindow(frame))  # no frame passed
+
+    assert api.window_resize("left")["ok"] is False
 
 
 def test_the_titlebar_works_without_a_frame_at_all(tmp_path):

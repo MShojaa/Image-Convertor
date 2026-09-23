@@ -16,6 +16,22 @@
        which Windows never hears about, so none of its snapping happens.
        app.js hands the gesture to Windows instead, and puts the class back
        if Windows will not take it. -->
+  <!-- The eight resize edges. The window has no non-client area -- see
+       window_frame.py -- so there is nothing for Windows to hit-test, and
+       these are what it grabs instead. Decorative to a screen reader: a
+       window is resized from the keyboard through the system menu, not by
+       tabbing to an edge. -->
+  <div class="resize-edges" aria-hidden="true">
+    <div class="resize-edge" data-edge="top"></div>
+    <div class="resize-edge" data-edge="right"></div>
+    <div class="resize-edge" data-edge="bottom"></div>
+    <div class="resize-edge" data-edge="left"></div>
+    <div class="resize-edge" data-edge="top-left"></div>
+    <div class="resize-edge" data-edge="top-right"></div>
+    <div class="resize-edge" data-edge="bottom-right"></div>
+    <div class="resize-edge" data-edge="bottom-left"></div>
+  </div>
+
   <div class="titlebar">
     <div class="titlebar-grip">
       <img src="logo.png" class="logo" alt="" width="18" height="18">

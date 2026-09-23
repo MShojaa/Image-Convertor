@@ -212,6 +212,53 @@ body {
   background-clip: content-box;
 }
 
+/* -- the resize edges -------------------------------------------------- */
+
+/* The window is all client area now, so Windows has nothing to hit-test and
+   the eight edges are the page's to offer. They sit above everything, which
+   is what a window's edge does -- a panel border 3px from the edge of the
+   window is not what anyone is reaching for there.
+
+   6px, which is about what Windows gives itself, and the corners are 12 so
+   they beat the two edges they overlap. */
+.resize-edges {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  /* The middle of the window is not an edge: only the eight children take
+     the pointer. */
+  pointer-events: none;
+}
+
+.resize-edge {
+  position: absolute;
+  pointer-events: auto;
+}
+
+/* A maximized window has no edges to drag -- there is nothing to resize it
+   to, and every other window on this desktop refuses as well. */
+body[data-maximized="true"] .resize-edges { display: none; }
+
+.resize-edge[data-edge="top"],
+.resize-edge[data-edge="bottom"] { left: 0; right: 0; height: 6px; cursor: ns-resize; }
+.resize-edge[data-edge="left"],
+.resize-edge[data-edge="right"] { top: 0; bottom: 0; width: 6px; cursor: ew-resize; }
+
+.resize-edge[data-edge="top"] { top: 0; }
+.resize-edge[data-edge="bottom"] { bottom: 0; }
+.resize-edge[data-edge="left"] { left: 0; }
+.resize-edge[data-edge="right"] { right: 0; }
+
+.resize-edge[data-edge="top-left"],
+.resize-edge[data-edge="top-right"],
+.resize-edge[data-edge="bottom-left"],
+.resize-edge[data-edge="bottom-right"] { width: 12px; height: 12px; }
+
+.resize-edge[data-edge="top-left"] { top: 0; left: 0; cursor: nwse-resize; }
+.resize-edge[data-edge="bottom-right"] { bottom: 0; right: 0; cursor: nwse-resize; }
+.resize-edge[data-edge="top-right"] { top: 0; right: 0; cursor: nesw-resize; }
+.resize-edge[data-edge="bottom-left"] { bottom: 0; left: 0; cursor: nesw-resize; }
+
 /* -- the titlebar ------------------------------------------------------ */
 
 /* Flush to the top of the window, full width, buttons in the corner -- which

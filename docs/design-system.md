@@ -391,11 +391,49 @@ All measured, and all in `image_convertor/window_frame.py` with the numbers:
   maximized, back on when restored. `resized` is what says which, because it
   fires however the window got there -- the page's own button, Aero Snap,
   Win+Up, a drag to the top edge, the taskbar.
-- **The style bit that restores the edges also draws them.** The grab areas are
-  invisible, but DWM still draws the window's border around them -- a line
-  outside a window that is otherwise the app's own colour to its edge.
-  `DWMWA_BORDER_COLOR` set to `DWMWA_COLOR_NONE` turns it off. Windows 11 or
-  nothing: on 10 the attribute is unknown, the call fails, and the border stays.
+- **The style bit that restores the edges brings a frame with it.** Measured,
+  with `GetWindowRect` against `GetClientRect` on the real window: with
+  `WS_THICKFRAME` the client area is inset by 8px on every side and the web
+  view sits at +8,+8. Nothing paints those 8 pixels -- black at first, white
+  once the frame is recalculated. That is the "border" that was never a
+  border, and no page-side colour can reach it, because it is not the page.
+
+  `WM_NCCALCSIZE` is where a window says how much of itself is client, and
+  answering "all of it" leaves the style bit -- so Windows still snaps and
+  still maximizes to the work area -- with nothing left over to paint.
+  Measured after: non-client 0 on every side in every state, the web view at
+  +0,+0, and maximized lands on 1920x1020, the work area exactly.
+
+  It costs the mouse edges: with no non-client area there is nothing for
+  Windows to hit-test. The page offers them instead -- see below.
+- **`DWMWA_BORDER_COLOR`** set to `DWMWA_COLOR_NONE` turns off the line DWM
+  draws around the window. Windows 11 or nothing: on 10 the attribute is
+  unknown, the call fails, and the border stays.
+- **`settle` runs before there is anything to settle.** `shown` fires while
+  the form still reports no native handle, so every call in it bailed and the
+  window came up with no resize border, no rounded corners and its frame
+  untouched -- which is why the first two attempts at this appeared to change
+  nothing. The handle is asked for again on every entry point now, and the
+  setup runs the first time one answers.
+
+### The eight edges
+
+The window is all client area, so Windows has nothing to hit-test and the
+edges are the page's to offer: eight absolutely-positioned boxes above
+everything, 6px along the sides and 12px in the corners so a corner beats the
+two edges it overlaps. Mousedown hands the gesture over exactly as the
+titlebar does -- `WM_NCLBUTTONDOWN` with `HTLEFT` through `HTBOTTOMRIGHT` --
+and Windows runs the loop, snapping included.
+
+**A maximized window hides them**, which is the whole of "a maximized window
+does not resize". It used to be done by taking `WS_THICKFRAME` off, and that
+meant a style change and a frame recalculation on every maximize -- which is
+what repainted the frame white.
+
+Three files have to agree on the eight names: the markup offers them, Python
+maps them to Windows' hit-test codes, the stylesheet gives each a cursor and a
+place to be. `tests/test_window.py` checks all three against each other,
+because a typo in any one of them is an edge that silently does nothing.
 
 ### The theme switcher
 
