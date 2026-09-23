@@ -70,6 +70,12 @@ WS_MINIMIZEBOX = 0x00020000
 DWMWA_BORDER_COLOR = 34
 DWMWA_COLOR_NONE = 0xFFFFFFFE
 
+# Rounded corners, the Windows 11 look. Maximized windows are square, because
+# a rounded corner against the edge of the screen is a notch out of it.
+DWMWA_WINDOW_CORNER_PREFERENCE = 33
+DWMWCP_DONOTROUND = 1
+DWMWCP_ROUND = 2
+
 # "The left button went down in the non-client area, on the caption."
 WM_NCLBUTTONDOWN = 0x00A1
 HTCAPTION = 2
@@ -78,6 +84,20 @@ SWP_NOMOVE = 0x0002
 SWP_NOSIZE = 0x0001
 SWP_NOZORDER = 0x0004
 SWP_FRAMECHANGED = 0x0020
+
+
+def corner_preference(maximized: bool) -> int:
+    """How the window's corners should be drawn in this state.
+
+    Rounded when the window floats, square when it is maximized -- a rounded
+    corner against the edge of the screen is a notch out of the screen, and
+    Windows draws its own windows square for exactly that reason.
+
+    It has to be DWM rather than a border-radius on the page: the page is
+    drawn inside the window, and a radius there rounds the content while the
+    window stays square, so the corners fill with whatever is behind.
+    """
+    return DWMWCP_DONOTROUND if maximized else DWMWCP_ROUND
 
 
 def sizing_style(style: int, maximized: bool) -> int:
@@ -166,9 +186,12 @@ class WindowFrame:
         if not (on_windows() and self._handle):
             return
 
+        maximized = self.is_maximized()
+        self._set_corners(maximized)
+
         user32 = ctypes.windll.user32
         style = user32.GetWindowLongW(self._handle, GWL_STYLE)
-        wanted = sizing_style(style, self.is_maximized())
+        wanted = sizing_style(style, maximized)
         if wanted == style:
             return
 
@@ -186,6 +209,17 @@ class WindowFrame:
             SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED,
         )
 
+    def _set_corners(self, maximized: bool) -> None:
+        """Round the window's corners, or square them off.
+
+        Windows 11 only, and silent about it: on 10 the attribute is unknown,
+        the call returns a failure HRESULT, and the window keeps the square
+        corners every window on that desktop has.
+        """
+        self._set_dwm_attribute(
+            DWMWA_WINDOW_CORNER_PREFERENCE, corner_preference(maximized)
+        )
+
     def _hide_frame_border(self) -> None:
         """Stop DWM drawing a border around the window.
 
@@ -198,20 +232,30 @@ class WindowFrame:
         Windows 11 only. On 10 the attribute is unknown, the call returns a
         failure HRESULT, and the border stays: the same window as before.
         """
-        if not self._handle:
+        self._set_dwm_attribute(DWMWA_BORDER_COLOR, DWMWA_COLOR_NONE)
+
+    def _set_dwm_attribute(self, attribute: int, value: int) -> None:
+        """One DWORD to the compositor, and never a reason to fail.
+
+        Every attribute used here is Windows 11's. On 10 the call returns a
+        failure HRESULT and the window looks the way it did before, which is
+        the right outcome for all of them.
+        """
+        if not (on_windows() and self._handle):
             return
 
         try:
-            colour = ctypes.c_uint(DWMWA_COLOR_NONE)
+            word = ctypes.c_uint(value)
             ctypes.windll.dwmapi.DwmSetWindowAttribute(
                 ctypes.c_void_p(self._handle),
-                ctypes.c_uint(DWMWA_BORDER_COLOR),
-                ctypes.byref(colour),
-                ctypes.sizeof(colour),
+                ctypes.c_uint(attribute),
+                ctypes.byref(word),
+                ctypes.sizeof(word),
             )
         except Exception:
             # Worth trying and not worth failing over, the same as the
-            # maximized bounds: a border is ugly rather than fatal.
+            # maximized bounds: square corners and a visible border are ugly
+            # rather than fatal.
             pass
 
     # -- called when the page's titlebar is grabbed ------------------------

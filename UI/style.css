@@ -5,7 +5,14 @@
 
 :root {
   /* Surfaces. Depth on dark comes from getting lighter as it comes forward;
-     shadows are nearly invisible on near-black, so they only soften edges. */
+     shadows are nearly invisible on near-black, so they only soften edges.
+
+     The window and the wells cut into it are two different jobs and two
+     different tokens. They were one, and the refresh darkened it for the
+     log's sake -- which also made the 12px of page around the panels the
+     darkest thing on screen, a black rim framing the window under a lighter
+     titlebar. A well is meant to look cut in. A window is not. */
+  --surface-window: #131519;
   --surface-sunken: #0e1013;
   --surface: #17191e;
   --surface-raised: #1f232a;
@@ -93,7 +100,10 @@
    as a focus ring or as text, which is what it is also used for. */
 
 [data-theme="light"] {
-  --surface-sunken: #eef1f5;
+  /* Light flips the depth rule, so the window is the light grey and the well
+     is the darker one -- the same two jobs, the same way round. */
+  --surface-window: #eff2f6;
+  --surface-sunken: #e6eaf0;
   --surface: #fbfcfe;
   --surface-raised: #ffffff;
   --surface-hover: #f2f5f9;
@@ -147,7 +157,7 @@ body {
   /* A fixed titlebar strip, and the app filling what is left of the window. */
   display: flex;
   flex-direction: column;
-  background: var(--surface-sunken);
+  background: var(--surface-window);
   color: var(--text);
   font-family: var(--font);
   font-size: var(--text-base);

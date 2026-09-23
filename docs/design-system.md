@@ -58,7 +58,8 @@ changing the hue changes every place it is used at once.
 
 | token | value | what it is |
 |---|---|---|
-| `--surface-sunken` | `#0e1013` | the window behind everything; the log and the chain strip |
+| `--surface-window` | `#131519` | the window behind everything |
+| `--surface-sunken` | `#0e1013` | a well cut into it: the log, the progress track |
 | `--surface` | `#17191e` | panels, anything sitting on the window |
 | `--surface-raised` | `#1f232a` | inputs, the things you can click into |
 | `--surface-hover` | `#262b33` | a row or a quiet button under the pointer |
@@ -66,7 +67,17 @@ changing the hue changes every place it is used at once.
 | `--border-strong` | `#3c444f` | a border that has to be seen: a hovered input, a scrollbar |
 | `--edge-light` | `rgba(255,255,255,0.05)` | the lit top pixel of a panel |
 
-Four levels and no more, and the fourth is a state rather than a layer. Depth
+**The window and the wells cut into it are two different jobs.** They were one
+token, and the refresh darkened it for the log's sake -- which also made the
+12px of page around the panels the darkest thing on screen, a black rim framing
+the window under a lighter titlebar. Measured at the left edge: 12px of
+`#0e1013`, then the panel's border, then `#17191e`. That rim is what "the
+borders do not feel nice" was pointing at, and it was never a border. A well is
+meant to look cut in; a window is not, and it now sits between the well and the
+panels so the window reads as one object with its own titlebar.
+
+Five levels and no more, and two of them are not layers: `--surface-hover` is a
+state, and `--surface-window` is the thing the layers sit on. Depth
 here comes from the surface getting *lighter* as it comes forward, which is how
 a dark interface does it -- shadows are invisible on near-black, so a raised
 panel that is the same colour as the one under it with a shadow between them
@@ -365,6 +376,13 @@ All measured, and all in `image_convertor/window_frame.py` with the numbers:
   at 1928x1088 against a work area of 1920x1020 -- the bottom 68 pixels,
   including the Convert button, behind the taskbar. `MaximizedBounds` fixes it.
 - **That bound is per monitor**, so it is set again whenever the window moves.
+- **The corners are Windows', not CSS'.** A `border-radius` on the page rounds
+  the content inside a window that is still square, so the corners fill with
+  whatever is behind it. `DWMWA_WINDOW_CORNER_PREFERENCE` rounds the window
+  itself, and it follows the state the same way the resize border does: rounded
+  while the window floats, square when maximized -- a rounded corner against
+  the edge of the screen is a notch out of the screen, which is why Windows
+  draws its own maximized windows square.
 - **The bit that gives the edges back does not know about maximizing.** Windows
   does not let you resize a maximized window -- there is nothing to resize it
   to -- but `WS_THICKFRAME` is a style, not a state, so a maximized window kept

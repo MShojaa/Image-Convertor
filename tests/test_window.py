@@ -190,3 +190,28 @@ class TestTheResizeBorderFollowsTheState:
         once = window_frame.sizing_style(0, maximized=True)
 
         assert window_frame.sizing_style(once, maximized=True) == once
+
+
+class TestTheCornersFollowTheStateToo:
+    """Rounded while the window floats, square when it is maximized.
+
+    A rounded corner against the edge of the screen is a notch out of the
+    screen, which is why Windows draws its own maximized windows square.
+    """
+
+    def test_a_restored_window_is_rounded(self):
+        assert window_frame.corner_preference(maximized=False) == (
+            window_frame.DWMWCP_ROUND
+        )
+
+    def test_a_maximized_window_is_not(self):
+        assert window_frame.corner_preference(maximized=True) == (
+            window_frame.DWMWCP_DONOTROUND
+        )
+
+    def test_the_two_are_different(self):
+        """Both are sent to the same attribute, so a typo that made them equal
+        would show as corners that never change and nothing else."""
+        assert window_frame.corner_preference(True) != window_frame.corner_preference(
+            False
+        )
