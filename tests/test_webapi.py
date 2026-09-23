@@ -937,15 +937,21 @@ def test_a_nonsense_start_path_does_not_stop_the_dialog(recording):
 class FakeFrame:
     """Stands in for the platform bits of having no titlebar."""
 
-    def __init__(self, maximized=False):
+    def __init__(self, maximized=False, takes_drag=True):
         self.maximized = maximized
         self.prepared = 0
+        self.takes_drag = takes_drag
+        self.drags = 0
 
     def before_maximize(self):
         self.prepared += 1
 
     def is_maximized(self):
         return self.maximized
+
+    def begin_drag(self):
+        self.drags += 1
+        return self.takes_drag
 
 
 class ControllableWindow(FakeWindow):
@@ -1020,6 +1026,36 @@ def test_the_button_follows_a_window_maximized_elsewhere(framed):
     # And toggling now restores rather than maximizing again.
     framed.window_toggle_maximize()
     assert framed._window.did == ["restore"]
+
+
+def test_grabbing_the_titlebar_hands_the_drag_to_the_platform(framed):
+    """The whole point: Windows runs the move loop, so its snapping, its
+    previews and its layouts grid come with it. Moving the window from the
+    page gets none of them."""
+    assert framed.window_drag()["ok"]
+    assert framed._frame.drags == 1
+
+
+def test_a_refused_drag_says_so_rather_than_raising(tmp_path):
+    """The page puts pywebview's own drag region back and moves the window the
+    old way. Worse, and not broken."""
+    frame = FakeFrame(takes_drag=False)
+    api = Api(tmp_path)
+    api.attach(ControllableWindow(frame), frame)
+
+    answer = api.window_drag()
+
+    assert answer["ok"] is False
+    assert answer["error"]
+
+
+def test_dragging_says_so_off_a_platform_that_has_a_frame(tmp_path):
+    """No frame at all -- another OS. The page falls back the same way."""
+    frame = FakeFrame()
+    api = Api(tmp_path)
+    api.attach(ControllableWindow(frame))  # no frame passed
+
+    assert api.window_drag()["ok"] is False
 
 
 def test_the_titlebar_works_without_a_frame_at_all(tmp_path):

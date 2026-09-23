@@ -284,13 +284,38 @@ all the way to the top edge, rather than a strip of someone else's chrome above
 a dark page.
 
 It is 32px, `--surface`, with a border under it. The left half carries the mark
-and the name and is the **drag region** -- `pywebview-drag-region`, which is
-what pywebview moves the window from. The right half carries the theme switcher
-and then the window buttons, and is deliberately *not* draggable: a button you
-can accidentally drag the window with is a button that sometimes does nothing.
+and the name and is what the window drags from. The right half carries the
+theme switcher and then the window buttons, and is deliberately *not*
+draggable: a button you can accidentally drag the window with is a button that
+sometimes does nothing.
 
 Double-clicking the drag region maximizes, because every other window on this
 desktop does and the one that does not feels broken rather than minimal.
+
+**The drag region is not a `pywebview-drag-region`, and that is the point.**
+pywebview's own drag region watches `mousemove` in the page and asks Python to
+put the window at the new position -- so the window is *placed*, frame by
+frame, by JavaScript. Windows is never told a drag is happening, and every
+behaviour it attaches to dragging a titlebar is attached to the modal move loop
+that a real caption press starts: snapping to an edge and previewing it, Snap
+Assist, the layouts grid, drag-to-the-top to maximize, shake to clear the
+desktop. A window moved by `SetBounds` gets none of them. That is not a gap
+that can be closed from the page -- they are not window positions, they are a
+loop inside Windows.
+
+So mousedown on the grip calls `window_drag`, which releases the capture and
+posts `WM_NCLBUTTONDOWN` with `HTCAPTION` -- Windows' own "the user has taken
+hold of the titlebar" -- and Windows runs the drag from there. Every one of
+those behaviours comes back, because none of them is being imitated.
+
+Two things ride along. Windows would maximize on a double-click of a real
+caption, but it only sees the presses the page forwards and the first one
+starts a move loop that swallows the second, so `event.detail` catches the
+second press and maximizes here instead. And if the platform will not take the
+drag -- another OS, or a backend with no window handle -- the grip becomes a
+`pywebview-drag-region` again and the window moves the old way: worse, and not
+broken. pywebview reads the selector at mousedown, so adding the class is
+enough for the very next drag.
 
 **The buttons are 46px wide and the full height of the bar**, which is what
 Windows uses: maximized, the target reaches the very corner of the screen, and

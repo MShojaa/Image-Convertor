@@ -112,6 +112,24 @@ class Api:
 
         return _ok(maximized=self._maximized())
 
+    def window_drag(self) -> dict:
+        """The titlebar was grabbed: let Windows do the dragging.
+
+        pywebview's own drag region moves the window from JavaScript, which
+        Windows never hears about -- so none of what it does for a real
+        titlebar drag happens: no snapping to an edge, no preview, no Snap
+        Assist, no layouts grid. This hands the gesture to Windows instead.
+
+        `ok: false` is not a failure worth showing anyone -- the page puts
+        pywebview's drag region back and carries on moving the window the old
+        way, which is what every other platform does anyway.
+        """
+        if self._frame is None:
+            return _fail("No frame.")
+        if not self._frame.begin_drag():
+            return _fail("The platform would not take the drag.")
+        return _ok()
+
     def window_close(self) -> dict:
         if self._window is None:
             return _fail("No window yet.")

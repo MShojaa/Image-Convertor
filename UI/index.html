@@ -9,11 +9,15 @@
 <body>
   <!-- The window's own titlebar. It is page content, not chrome: the OS
        one is gone (main.py passes frameless=True), so this is the only one
-       there is. `pywebview-drag-region` is what pywebview drags the window
-       from -- and it is on the left half only, so the buttons on the right
-       are buttons rather than places to grab. -->
+       there is.
+
+       The left half is what the window drags from, and it is deliberately
+       NOT a `pywebview-drag-region`: that moves the window from JavaScript,
+       which Windows never hears about, so none of its snapping happens.
+       app.js hands the gesture to Windows instead, and puts the class back
+       if Windows will not take it. -->
   <div class="titlebar">
-    <div class="titlebar-grip pywebview-drag-region">
+    <div class="titlebar-grip">
       <img src="logo.png" class="logo" alt="" width="18" height="18">
       <span class="titlebar-title">Image Convertor</span>
     </div>

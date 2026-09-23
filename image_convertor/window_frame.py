@@ -22,6 +22,19 @@ button -- sat behind the taskbar. `MaximizedBounds` is the documented answer.
 rather than once at startup. A window moved to a second screen with a
 different taskbar would otherwise be given the first screen's rectangle.
 
+**pywebview drags the window itself, and Windows never finds out.** Its drag
+region listens to `mousemove` in the page and calls `pywebviewMoveWindow` with
+the offset, so the window is *placed*, frame by frame, by JavaScript. Every
+behaviour Windows attaches to dragging a titlebar is attached to the modal move
+loop that a real caption drag starts -- edge snapping and its preview, Snap
+Assist, the layouts grid, drag-to-the-top to maximize, shake. A window moved by
+`SetBounds` gets none of them, which is why the titlebar felt off the grid.
+
+`begin_drag` hands the gesture over instead: release the capture and post
+`WM_NCLBUTTONDOWN` with `HTCAPTION`, which is Windows' own "the user has taken
+hold of the titlebar". Windows runs the loop from there and every one of those
+behaviours comes back, because they are not being imitated.
+
 **Putting `WS_THICKFRAME` back brings a visible frame with it.** The grab areas
 are invisible, but DWM still draws the window's border around them -- a line in
 the accent colour of whoever's theme is running, or black, outside a window
@@ -48,6 +61,10 @@ WS_MINIMIZEBOX = 0x00020000
 # colour.
 DWMWA_BORDER_COLOR = 34
 DWMWA_COLOR_NONE = 0xFFFFFFFE
+
+# "The left button went down in the non-client area, on the caption."
+WM_NCLBUTTONDOWN = 0x00A1
+HTCAPTION = 2
 
 SWP_NOMOVE = 0x0002
 SWP_NOSIZE = 0x0001
@@ -168,6 +185,49 @@ class WindowFrame:
             # Worth trying and not worth failing over, the same as the
             # maximized bounds: a border is ugly rather than fatal.
             pass
+
+    # -- called when the page's titlebar is grabbed ------------------------
+
+    def begin_drag(self) -> bool:
+        """Hand a titlebar drag to Windows. True if it took it.
+
+        The page calls this on mousedown in its drag region, instead of
+        letting pywebview move the window from JavaScript. Windows then runs
+        its own move loop, and the snapping, the previews, Snap Assist and the
+        layouts grid come with it -- none of which can be imitated from the
+        page, because they are not window positions, they are a modal loop.
+
+        Two details, both of which matter:
+
+        `ReleaseCapture` only lets go of what the *calling thread* has hold
+        of, and the mouse is captured by the web view on the GUI thread, while
+        this runs on the thread serving the page. So the whole thing is
+        marshalled with `Invoke` -- without that it releases nothing, the
+        capture stays with the web view, and the move loop gets no mouse.
+
+        `PostMessage`, not `SendMessage`: the move loop does not return until
+        the drag ends, and sending would block this thread for as long as the
+        user holds the button.
+        """
+        if not (on_windows() and self._handle):
+            return False
+
+        try:
+            from System import Action
+
+            form = self._window.native
+            form.Invoke(Action(self._grab_caption))
+            return True
+        except Exception:
+            # The page falls back to pywebview's own drag, which moves the
+            # window without any of the above -- worse, and not broken.
+            return False
+
+    def _grab_caption(self) -> None:
+        """The two calls, on the GUI thread. See `begin_drag`."""
+        user32 = ctypes.windll.user32
+        user32.ReleaseCapture()
+        user32.PostMessageW(self._handle, WM_NCLBUTTONDOWN, HTCAPTION, 0)
 
     # -- called before every maximize --------------------------------------
 
